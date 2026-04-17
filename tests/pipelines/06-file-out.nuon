@@ -1,0 +1,10 @@
+{
+  "_comment": "Write to a temp file — smoke test for file-out",
+  "nodes": [
+    {"id": "src", "type": "const", "position": {"x": 0, "y": 0}, "params": {"value": "{test: true value: 42}"}},
+    {"id": "out", "type": "file-out", "position": {"x": 200, "y": 0}, "params": {"path": "/tmp/gonude-test-out.nuon", "format": "nuon"}}
+  ],
+  "edges": [
+    {"id": "e1", "from": "src", "from_port": "output", "to": "out", "to_port": "input"}
+  ]
+}

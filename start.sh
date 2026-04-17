@@ -19,7 +19,7 @@ echo "Starting GoNude server on :3001..."
 SERVER_PID=$!
 
 echo "Starting frontend dev server on :3000..."
-"$BUN" --cwd frontend run dev &
+(cd frontend && "$BUN" run dev) &
 VITE_PID=$!
 
 trap "kill $SERVER_PID $VITE_PID 2>/dev/null" EXIT INT TERM

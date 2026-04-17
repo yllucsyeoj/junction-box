@@ -29,15 +29,21 @@ let specs = ($cmds | each {|cmd|
     let in_type = ($sig_rows | where parameter_type == 'input' | first | get syntax_shape | default 'any')
     let out_type = ($sig_rows | where parameter_type == 'output' | first | get syntax_shape | default 'any')
 
+    let param_opts = ($m | get -o param_options | default {})
+
     let params = ($sig_rows
         | where parameter_type == 'named'
         | where parameter_name != 'help'
-        | each {|p| {
-            name: $p.parameter_name
-            type: ($p.syntax_shape | default 'string')
-            required: (not $p.is_optional)
-            description: ($p.description | default '')
-        }})
+        | each {|p|
+            let opts = ($param_opts | get -o $p.parameter_name | default null)
+            let base = {
+                name: $p.parameter_name
+                type: ($p.syntax_shape | default 'string')
+                required: (not $p.is_optional)
+                description: ($p.description | default '')
+            }
+            if $opts != null { $base | insert options $opts } else { $base }
+        })
 
     {
         name: ($cmd.name | str replace 'prim-' '')

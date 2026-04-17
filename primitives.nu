@@ -4,21 +4,38 @@
 # Metadata used by scripts/introspect.nu for canvas display and agent use.
 # Keys match the short name (strip "prim-", replace "-" with "_").
 export const PRIMITIVE_META = {
-    fetch: {category: "input", color: "#f97316", agent_hint: "Fetch JSON/table data from a URL via HTTP GET"}
-    const: {category: "input", color: "#f97316", agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])"}
-    env: {category: "input", color: "#f97316", agent_hint: "Read an environment variable by name, returns its string value"}
-    file_in: {category: "input", color: "#f97316", agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string"}
-    filter: {category: "transform", color: "#3b82f6", agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"}
-    map: {category: "transform", color: "#3b82f6", agent_hint: "Add or replace a column with a NUON constant value"}
-    select: {category: "transform", color: "#3b82f6", agent_hint: "Keep only the named columns from a table (space-separated)"}
-    sort: {category: "transform", color: "#3b82f6", agent_hint: "Sort a table by a column. direction: asc or desc"}
-    display: {category: "output", color: "#22c55e", agent_hint: "Print the value to stdout — captured in the run log"}
-    file_out: {category: "output", color: "#22c55e", agent_hint: "Write the value to a file. format: nuon, json, csv, or text"}
-    return: {category: "output", color: "#22c55e", agent_hint: "Return the pipeline result as the final output (pass-through terminal node)"}
-    llm: {category: "external", color: "#a855f7", agent_hint: "Call an LLM (Anthropic) with a prompt string. Returns the completion text."}
-    math: {category: "compute", color: "#eab308", agent_hint: "Apply a math operation (+, -, *, /) with an operand to a number"}
-    string_op: {category: "compute", color: "#eab308", agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace (arg: old:new)"}
-    type_cast: {category: "compute", color: "#eab308", agent_hint: "Cast a value to a target type: int, float, string, bool"}
+    fetch: {category: "input", color: "#f97316", agent_hint: "Fetch JSON/table data from a URL via HTTP GET", param_options: {}}
+    const: {category: "input", color: "#f97316", agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_options: {}}
+    env: {category: "input", color: "#f97316", agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
+    file_in: {category: "input", color: "#f97316", agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
+    filter: {category: "transform", color: "#3b82f6", agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"
+             param_options: {op: ["==", "!=", ">", "<", "contains"]}}
+    map: {category: "transform", color: "#3b82f6", agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
+    select: {category: "transform", color: "#3b82f6", agent_hint: "Keep only the named columns from a table (space-separated)", param_options: {}}
+    sort: {category: "transform", color: "#3b82f6", agent_hint: "Sort a table by a column. direction: asc or desc"
+           param_options: {direction: ["asc", "desc"]}}
+    display: {category: "output", color: "#22c55e", agent_hint: "Print the value to stdout — captured in the run log", param_options: {}}
+    file_out: {category: "output", color: "#22c55e", agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
+               param_options: {format: ["nuon", "json", "csv", "text"]}}
+    return: {category: "output", color: "#22c55e", agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
+    llm: {category: "external", color: "#a855f7", agent_hint: "Call an LLM (Anthropic) with a prompt string. Returns the completion text."
+          param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
+    math: {category: "compute", color: "#eab308", agent_hint: "Apply a math operation (+, -, *, /) with an operand to a number"
+           param_options: {op: ["+", "-", "*", "/"]}}
+    string_op: {category: "compute", color: "#eab308", agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace (arg: old:new)"
+                param_options: {op: ["upcase", "downcase", "trim", "length", "split", "replace"]}}
+    type_cast: {category: "compute", color: "#eab308", agent_hint: "Cast a value to a target type: int, float, string, bool"
+                param_options: {target: ["int", "float", "string", "bool"]}}
+    count: {category: "transform", color: "#3b82f6", agent_hint: "Count the number of rows in a table", param_options: {}}
+    first: {category: "transform", color: "#3b82f6", agent_hint: "Return the first N rows of a table", param_options: {}}
+    last: {category: "transform", color: "#3b82f6", agent_hint: "Return the last N rows of a table", param_options: {}}
+    rename: {category: "transform", color: "#3b82f6", agent_hint: "Rename a column: provide old and new column name", param_options: {}}
+    get: {category: "transform", color: "#3b82f6", agent_hint: "Get a field from a record or an index from a list", param_options: {}}
+    http_post: {category: "external", color: "#a855f7", agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
+    to_string: {category: "compute", color: "#eab308", agent_hint: "Format a value as a JSON, NUON, CSV, or text string"
+                param_options: {format: ["json", "nuon", "csv", "text"]}}
+    from_string: {category: "compute", color: "#eab308", agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
+                  param_options: {format: ["json", "nuon", "csv"]}}
 }
 
 # ── Input primitives ──────────────────────────────────────────────────────────
@@ -199,5 +216,81 @@ export def "prim-type-cast" [
         "string" => { $v | into string }
         "bool" => { $v | into bool }
         _ => { error make {msg: $"Unknown type: ($target). Valid: int, float, string, bool"} }
+    }
+}
+
+# ── Additional transform primitives ──────────────────────────────────────────
+
+# Count the number of rows in a table
+export def "prim-count" []: table -> int {
+    $in | length
+}
+
+# Return the first N rows of a table
+export def "prim-first" [
+    --n: string = "10"             # Number of rows to return
+]: table -> table {
+    $in | first ($n | into int)
+}
+
+# Return the last N rows of a table
+export def "prim-last" [
+    --n: string = "10"             # Number of rows to return
+]: table -> table {
+    $in | last ($n | into int)
+}
+
+# Rename a column
+export def "prim-rename" [
+    --from: string = ""            # Current column name
+    --to: string = ""              # New column name
+]: table -> table {
+    $in | rename --column {($from): $to}
+}
+
+# Get a field from a record or an index from a list
+export def "prim-get" [
+    --key: string = ""             # Field name (record) or 0-based integer index (list)
+]: any -> any {
+    let v = $in
+    if ($v | describe | str starts-with 'list') {
+        $v | get ($key | into int)
+    } else {
+        $v | get $key
+    }
+}
+
+# ── Additional external primitives ────────────────────────────────────────────
+
+# HTTP POST request — pipe body, specify URL
+export def "prim-http-post" [
+    --url: string = ""             # URL to POST to
+    --content-type: string = "application/json"  # Content-Type header
+]: any -> any {
+    $in | to json | http post $url --content-type $content_type
+}
+
+# ── Additional compute primitives ─────────────────────────────────────────────
+
+# Format a value as a string (json, nuon, csv, or text)
+export def "prim-to-string" [
+    --format: string = "json"      # Output format: json, nuon, csv, text
+]: any -> string {
+    match $format {
+        "json" => { $in | to json }
+        "csv" => { $in | to csv }
+        "text" => { $in | into string }
+        _ => { $in | to nuon }
+    }
+}
+
+# Parse a string as json, nuon, or csv
+export def "prim-from-string" [
+    --format: string = "json"      # Input format: json, nuon, csv
+]: string -> any {
+    match $format {
+        "csv" => { $in | from csv }
+        "nuon" => { $in | from nuon }
+        _ => { $in | from json }
     }
 }

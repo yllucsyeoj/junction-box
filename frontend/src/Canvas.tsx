@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactFlow, {
   Node, Edge, Connection, addEdge,
   useNodesState, useEdgesState,
@@ -15,18 +15,33 @@ interface Props {
   nodeSpecs: NodeSpec[]
   nodeStatuses: Record<string, 'idle' | 'running' | 'done' | 'error'>
   appNodeParams: Record<string, Record<string, unknown>>
-  onSelectNode: (id: string | null, type: string | null) => void
+  appNodeOutputs: Record<string, string>
+  onSelectNode: (id: string | null, type: string | null, connectedParams: Set<string>) => void
   onRun: (graph: Graph) => void
   onNodeAdded: (id: string, params: Record<string, unknown>, type: string) => void
 }
 
-export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelectNode, onRun, onNodeAdded }: Props) {
+export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, appNodeOutputs, onSelectNode, onRun, onNodeAdded }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<PrimitiveNodeData>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Typed edge enforcement
+  // Recompute edgeConnectedParams whenever edges or selected node changes
+  useEffect(() => {
+    if (!selectedNodeId) return
+    const connected = new Set(
+      edges
+        .filter(e => e.target === selectedNodeId && e.targetHandle !== 'input')
+        .map(e => e.targetHandle!)
+        .filter(Boolean)
+    )
+    const node = nodes.find(n => n.id === selectedNodeId)
+    onSelectNode(selectedNodeId, node?.data.type ?? null, connected)
+  }, [edges, selectedNodeId]) // intentionally omit onSelectNode + nodes to avoid loops
+
+  // Typed edge enforcement — also allows wiring to param handles
   const isValidConnection = useCallback((connection: Connection) => {
     const sourceNode = nodes.find(n => n.id === connection.source)
     const targetNode = nodes.find(n => n.id === connection.target)
@@ -37,24 +52,33 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
     if (!srcSpec || !tgtSpec) return false
 
     const srcPort = srcSpec.ports.outputs.find(p => p.name === (connection.sourceHandle ?? 'output'))
-    const tgtPort = tgtSpec.ports.inputs.find(p => p.name === (connection.targetHandle ?? 'input'))
-    if (!srcPort || !tgtPort) return false
+    if (!srcPort) return false
 
-    // 'any' is compatible with everything
-    return srcPort.type === 'any' || tgtPort.type === 'any' || srcPort.type === tgtPort.type
+    const tgtPortName = connection.targetHandle ?? 'input'
+
+    // Check if target is a pipeline input port
+    const tgtPort = tgtSpec.ports.inputs.find(p => p.name === tgtPortName)
+    if (tgtPort) {
+      return srcPort.type === 'any' || tgtPort.type === 'any' || srcPort.type === tgtPort.type
+    }
+
+    // Check if target is a param handle — params accept any type (coerced to string internally)
+    const isParam = tgtSpec.params.some(p => p.name === tgtPortName)
+    return isParam
   }, [nodes, nodeSpecs])
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges(eds => addEdge({ ...connection, animated: true }, eds))
   }, [setEdges])
 
-  // Merge app param state into node data for rendering
+  // Merge app param state, status, and output into node data for rendering
   const displayNodes = nodes.map(n => ({
     ...n,
     data: {
       ...n.data,
       params: { ...n.data.params, ...(appNodeParams[n.id] ?? {}) },
       status: nodeStatuses[n.id] ?? 'idle',
+      output: appNodeOutputs[n.id],
     }
   }))
 
@@ -74,7 +98,9 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
     const spec = nodeSpecs.find(s => s.name === nodeType)
     if (!spec) return
 
-    const defaultParams = Object.fromEntries(spec.params.map(p => [p.name, '']))
+    const defaultParams = Object.fromEntries(
+      spec.params.map(p => [p.name, p.options ? p.options[0] : ''])
+    )
     const id = newId()
 
     const newNode: Node<PrimitiveNodeData> = {
@@ -157,10 +183,26 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
 
   const handleRun = useCallback(() => onRun(buildGraph()), [onRun, buildGraph])
 
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node<PrimitiveNodeData>) => {
+    setSelectedNodeId(node.id)
+    const connected = new Set(
+      edges
+        .filter(e => e.target === node.id && e.targetHandle !== 'input')
+        .map(e => e.targetHandle!)
+        .filter(Boolean)
+    )
+    onSelectNode(node.id, node.data.type, connected)
+  }, [edges, onSelectNode])
+
+  const handlePaneClick = useCallback(() => {
+    setSelectedNodeId(null)
+    onSelectNode(null, null, new Set())
+  }, [onSelectNode])
+
   return (
     <div
       ref={wrapperRef}
-      style={{ position: 'relative', height: '100%' }}
+      style={{ position: 'relative', width: '100%', height: '100%' }}
       onDragOver={onDragOver}
       onDrop={onFileDrop}
     >
@@ -172,9 +214,9 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
         <button
           onClick={handleRun}
           style={{
-            background: '#22c55e', color: '#000', border: 'none', borderRadius: 4,
+            background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4,
             padding: '6px 18px', cursor: 'pointer', fontFamily: 'monospace',
-            fontWeight: 'bold', fontSize: 13,
+            fontWeight: 'bold', fontSize: 13, boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
           }}
         >
           ▶ Run
@@ -182,8 +224,9 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
         <button
           onClick={handleSave}
           style={{
-            background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4,
+            background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4,
             padding: '6px 14px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 13,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
           }}
         >
           ↓ Save NUON
@@ -199,14 +242,14 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, onSelec
         onConnect={onConnect}
         isValidConnection={isValidConnection}
         onInit={setRfInstance}
-        onNodeClick={(_, node) => onSelectNode(node.id, node.data.type)}
-        onPaneClick={() => onSelectNode(null, null)}
+        onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
         onDrop={onDrop}
         onDragOver={onDragOver}
         fitView
       >
         <Controls />
-        <Background color="#333" gap={16} />
+        <Background color="#bbb" gap={16} />
       </ReactFlow>
     </div>
   )

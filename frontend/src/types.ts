@@ -30,6 +30,7 @@ export interface ParamSpec {
   type: string
   required: boolean
   description: string
+  options?: string[]
 }
 
 export interface NodeSpec {

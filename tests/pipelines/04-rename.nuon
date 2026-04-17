@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {"id": "src", "type": "const", "position": {"x": 0, "y": 0}, "params": {"value": "[[name age]; [Alice 35] [Bob 25]]"}},
+    {"id": "op", "type": "rename", "position": {"x": 200, "y": 0}, "params": {"from": "age", "to": "years"}},
+    {"id": "out", "type": "return", "position": {"x": 400, "y": 0}, "params": {}}
+  ],
+  "edges": [
+    {"id": "e1", "from": "src", "from_port": "output", "to": "op", "to_port": "input"},
+    {"id": "e2", "from": "op", "from_port": "output", "to": "out", "to_port": "input"}
+  ]
+}

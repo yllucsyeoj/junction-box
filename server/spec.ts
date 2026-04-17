@@ -2,7 +2,7 @@ import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export interface Port { name: string; type: string }
-export interface ParamSpec { name: string; type: string; required: boolean; description: string }
+export interface ParamSpec { name: string; type: string; required: boolean; description: string; options?: string[] }
 export interface NodeSpec {
   name: string
   category: string
@@ -39,7 +39,10 @@ let specs = ($cmds | each {|cmd|
         category: $auto_category
         color: "#6b7280"
         agent_hint: ($cmd.description | default "")
+        param_options: {}
     })
+
+    let param_opts = ($m | get -o param_options | default {})
 
     let sig_rows = ($cmd.signatures | transpose key val | first | get val)
     let in_type = ($sig_rows | where parameter_type == 'input' | first | get syntax_shape | default 'any')
@@ -48,12 +51,16 @@ let specs = ($cmds | each {|cmd|
     let params = ($sig_rows
         | where parameter_type == 'named'
         | where parameter_name != 'help'
-        | each {|p| {
-            name: $p.parameter_name
-            type: ($p.syntax_shape | default 'string')
-            required: (not $p.is_optional)
-            description: ($p.description | default '')
-        }})
+        | each {|p|
+            let opts = ($param_opts | get -o $p.parameter_name | default null)
+            let base = {
+                name: $p.parameter_name
+                type: ($p.syntax_shape | default 'string')
+                required: (not $p.is_optional)
+                description: ($p.description | default '')
+            }
+            if $opts != null { $base | insert options $opts } else { $base }
+        })
 
     {
         name: ($cmd.name | str replace 'prim-' '')
