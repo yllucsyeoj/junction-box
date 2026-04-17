@@ -2,14 +2,24 @@
 # Start GoNude — server on :3001, frontend on :3000
 set -e
 
-export PATH="$HOME/.bun/bin:$PATH"
+BUN="$HOME/.bun/bin/bun"
+
+# Install dependencies if node_modules are missing
+if [ ! -d "server/node_modules" ]; then
+  echo "Installing server dependencies..."
+  "$BUN" install --cwd server
+fi
+if [ ! -d "frontend/node_modules" ]; then
+  echo "Installing frontend dependencies..."
+  "$BUN" install --cwd frontend
+fi
 
 echo "Starting GoNude server on :3001..."
-bun run server/index.ts &
+"$BUN" run server/index.ts &
 SERVER_PID=$!
 
 echo "Starting frontend dev server on :3000..."
-cd frontend && bun run dev &
+"$BUN" --cwd frontend run dev &
 VITE_PID=$!
 
 trap "kill $SERVER_PID $VITE_PID 2>/dev/null" EXIT INT TERM
