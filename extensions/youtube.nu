@@ -148,3 +148,33 @@ export def "prim-youtube-channel" [
 
     yt_parse_rss $"https://www.youtube.com/feeds/videos.xml?channel_id=($channel_id)" ($limit | into int)
 }
+
+# Fetch videos from a YouTube playlist via Atom RSS
+export def "prim-youtube-playlist" [
+    --playlist_id: string = ""   # YouTube playlist ID (e.g. PLbpi6ZahtOH6...)
+    --limit:       string = "25" # Max number of videos to return
+]: nothing -> table {
+    if ($playlist_id | is-empty) {
+        error make {msg: "provide --playlist_id (the PLxxx string from the playlist URL)"}
+    }
+    yt_parse_rss $"https://www.youtube.com/feeds/videos.xml?playlist_id=($playlist_id)" ($limit | into int)
+}
+
+# Fetch metadata for a single YouTube video via oEmbed
+export def "prim-youtube-video" [
+    --video_id: string = ""   # Bare video ID (dQw4w9WgXcQ) or full YouTube URL
+]: nothing -> record {
+    if ($video_id | is-empty) {
+        error make {msg: "provide --video_id as a bare ID or full YouTube URL"}
+    }
+    let vid = (yt_normalize_id $video_id)
+    let url = $"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=($vid)&format=json"
+    let raw = (http get -H {User-Agent: $YT_UA} $url)
+    {
+        video_id:      $vid
+        title:         (try { $raw.title         } catch { null })
+        author:        (try { $raw.author_name   } catch { null })
+        channel_url:   (try { $raw.author_url    } catch { null })
+        thumbnail_url: (try { $raw.thumbnail_url } catch { null })
+    }
+}
