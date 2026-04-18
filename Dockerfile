@@ -12,7 +12,7 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
 # Install Nushell (multi-arch: amd64 or arm64)
-ARG NU_VERSION=0.101.0
+ARG NU_VERSION=0.111.0
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
       arm64) NU_ARCH="aarch64-unknown-linux-musl" ;; \
