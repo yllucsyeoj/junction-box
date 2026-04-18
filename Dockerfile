@@ -11,10 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
-# Install Nushell
+# Install Nushell (multi-arch: amd64 or arm64)
 ARG NU_VERSION=0.101.0
-RUN curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    | tar -xz --strip-components=1 -C /usr/local/bin "nu-${NU_VERSION}-x86_64-unknown-linux-musl/nu"
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+      arm64) NU_ARCH="aarch64-unknown-linux-musl" ;; \
+      *)     NU_ARCH="x86_64-unknown-linux-musl"  ;; \
+    esac && \
+    curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-${NU_ARCH}.tar.gz" \
+    | tar -xz --strip-components=1 -C /usr/local/bin "nu-${NU_VERSION}-${NU_ARCH}/nu"
 
 WORKDIR /app
 
