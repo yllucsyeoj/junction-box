@@ -83,6 +83,8 @@ def yt_xml_attr [attr: string]: record -> string {
 
 # Extract and parse a JSON blob assigned to a JS variable in a YouTube page
 # Usage:  $html | yt_extract_page_json "var ytInitialData = "
+# Handles two common terminators: ";</script>" and ";var " (picks whichever comes first)
+# str substring is end-inclusive, so we use end_idx - 1 to exclude the trailing ";"
 def yt_extract_page_json [marker: string]: string -> record {
     let start_idx = ($in | str index-of $marker)
     if $start_idx == -1 {
@@ -91,11 +93,24 @@ def yt_extract_page_json [marker: string]: string -> record {
     let marker_len = ($marker | str length)
     let total_len  = ($in | str length)
     let after      = ($in | str substring ($start_idx + $marker_len)..$total_len)
-    let end_idx    = ($after | str index-of ";</script>")
-    if $end_idx == -1 {
+
+    # Find the earliest terminator: ";</script>" or ";var "
+    let end_script = ($after | str index-of ";</script>")
+    let end_var    = ($after | str index-of ";var ")
+
+    let end_idx = if $end_script == -1 and $end_var == -1 {
         error make {msg: $"Could not parse JSON after '($marker)' — YouTube structure may have changed"}
+        -1
+    } else if $end_script == -1 {
+        $end_var
+    } else if $end_var == -1 {
+        $end_script
+    } else {
+        [$end_script $end_var] | math min
     }
-    $after | str substring 0..$end_idx | from json
+
+    # end_idx is the position of ";", so use end_idx - 1 to exclude it
+    $after | str substring 0..($end_idx - 1) | from json
 }
 
 # Fetch and parse a YouTube Atom RSS feed URL, returning up to n entries as a table
@@ -177,4 +192,89 @@ export def "prim-youtube-video" [
         channel_url:   (try { $raw.author_url    } catch { null })
         thumbnail_url: (try { $raw.thumbnail_url } catch { null })
     }
+}
+
+# Fetch the spoken transcript of a YouTube video as plain text.
+# Strategy: fetch the watch page to extract the INNERTUBE_API_KEY, then POST to
+# YouTube's ANDROID InnerTube player endpoint (no PO token required), get the
+# caption track URL, fetch the XML (which http get auto-parses), and join all
+# <p> text nodes into plain text.
+export def "prim-youtube-transcript" [
+    --video_id: string = ""    # Bare video ID or full YouTube URL
+    --lang:     string = "en"  # Caption language code (e.g. en, es, fr)
+]: nothing -> string {
+    if ($video_id | is-empty) {
+        error make {msg: "provide --video_id as a bare ID or full YouTube URL"}
+    }
+    let vid  = (yt_normalize_id $video_id)
+
+    # Step 1 — Fetch the watch page to get the InnerTube API key
+    let page     = (http get -H {User-Agent: $YT_UA Accept-Language: "en-US,en;q=0.9"} $"https://www.youtube.com/watch?v=($vid)")
+    let key_hits = ($page | parse --regex '"INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)"')
+    if ($key_hits | is-empty) {
+        error make {msg: $"Could not extract InnerTube API key for video ($vid) — YouTube structure may have changed"}
+    }
+    let api_key  = ($key_hits | first | get capture0)
+
+    # Step 2 — Use ANDROID InnerTube player API (no PO token required)
+    let body_json = ({
+        context: {client: {clientName: "ANDROID", clientVersion: "20.10.38"}}
+        videoId: $vid
+    } | to json)
+    let player = (http post -H {
+        User-Agent:   $YT_UA
+        Accept-Language: "en-US,en;q=0.9"
+        Content-Type: "application/json"
+    } $"https://www.youtube.com/youtubei/v1/player?key=($api_key)" $body_json)
+
+    let tracks = (try {
+        $player | get captions.playerCaptionsTracklistRenderer.captionTracks
+    } catch {
+        error make {msg: $"No captions available for video ($vid). The video may not have subtitles."}
+    })
+
+    if ($tracks | is-empty) {
+        error make {msg: $"No caption tracks found for video ($vid)."}
+    }
+
+    # Prefer manual transcript in requested language; fall back to ASR, then first track
+    let manual_match = ($tracks | where {|t| ($t | get languageCode? | default "") == $lang and ($t | get kind? | default "") != "asr"})
+    let asr_match    = ($tracks | where {|t| ($t | get languageCode? | default "") == $lang and ($t | get kind? | default "") == "asr"})
+    let track = if not ($manual_match | is-empty) {
+        $manual_match | first
+    } else if not ($asr_match | is-empty) {
+        $asr_match | first
+    } else {
+        $tracks | first
+    }
+
+    let caption_url = (try { $track | get baseUrl } catch {
+        error make {msg: $"Could not get caption URL for video ($vid)"}
+    })
+
+    # Step 3 — Fetch caption XML; http get auto-parses XML to a record in Nu 0.111
+    # The timedtext format is: <timedtext><body><p t="..." d="...">text</p>...</body></timedtext>
+    let doc = (http get -H {User-Agent: $YT_UA Accept-Language: "en-US,en;q=0.9"} $caption_url)
+
+    let body_el = (try {
+        $doc.content | where {|n| ($n | get tag? | default "") == "body"} | first
+    } catch {
+        error make {msg: $"Could not find body element in caption XML for video ($vid)"}
+    })
+
+    let p_nodes = ($body_el.content | where {|node| ($node | get tag? | default "") == "p"})
+    if ($p_nodes | is-empty) {
+        error make {msg: $"No transcript segments found in caption XML for video ($vid)"}
+    }
+
+    $p_nodes
+    | each {|node| $node | yt_xml_text | str trim}
+    | where {|s| ($s | str length) > 0}
+    | str join " "
+    | str replace --all "&amp;"  "&"
+    | str replace --all "&lt;"   "<"
+    | str replace --all "&gt;"   ">"
+    | str replace --all "&#39;"  "'"
+    | str replace --all "&quot;" "\""
+    | str replace --all "&#34;"  "\""
 }
