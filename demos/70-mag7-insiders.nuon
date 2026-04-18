@@ -1,0 +1,13 @@
+{
+  nodes: [
+    {id: "a", type: "const", position: {x: 0, y: 0}, params: {value: "[[name age]; [Alice 30] [Bob 25]]"}}
+    {id: "b", type: "const", position: {x: 0, y: 80}, params: {value: "[[name age]; [Carol 35]]"}}
+    {id: "combined", type: "append", position: {x: 200, y: 40}, params: {items: "[]"}}
+    {id: "out", type: "return", position: {x: 400, y: 40}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "a", from_port: "output", to: "combined", to_port: "input"}
+    {id: "e2", from: "b", from_port: "output", to: "combined", to_port: "items"}
+    {id: "e3", from: "combined", from_port: "output", to: "out", to_port: "input"}
+  ]
+}

@@ -2,3 +2,12 @@ node_modules/
 .worktrees/
 dist/
 .DS_Store
+# Data dir: track directory structure (.gitkeep) but not runtime files
+data/patches/*.json
+data/runs.jsonl
+# Legacy patches dir
+patches/
+# Misc test files
+test.json
+testex.csv
+tsla10k.csv

@@ -1,0 +1,9 @@
+{
+  nodes: [
+    {id: "src", type: "sec-earnings", position: {x: 0, y: 0}, params: {ticker: "AAPL", quarters: "4"}}
+    {id: "out", type: "return", position: {x: 300, y: 0}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "src", from_port: "output", to: "out", to_port: "input"}
+  ]
+}

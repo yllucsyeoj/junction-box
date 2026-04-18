@@ -1,0 +1,13 @@
+{
+  nodes: [
+    {id: "lhs", type: "const", position: {x: 0, y: 0}, params: {value: "100"}}
+    {id: "rhs", type: "const", position: {x: 0, y: 100}, params: {value: "3"}}
+    {id: "div", type: "math", position: {x: 200, y: 50}, params: {op: "/", operand: "1"}}
+    {id: "out", type: "return", position: {x: 400, y: 50}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "lhs", from_port: "output", to: "div", to_port: "input"}
+    {id: "e2", from: "rhs", from_port: "output", to: "div", to_port: "operand"}
+    {id: "e3", from: "div", from_port: "output", to: "out", to_port: "input"}
+  ]
+}

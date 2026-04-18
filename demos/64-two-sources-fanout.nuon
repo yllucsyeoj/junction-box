@@ -1,0 +1,16 @@
+{
+  nodes: [
+    {id: "lhs", type: "const", position: {x: 0, y: 0}, params: {value: "10"}}
+    {id: "rhs", type: "const", position: {x: 0, y: 100}, params: {value: "5"}}
+    {id: "sum", type: "math", position: {x: 200, y: 0}, params: {op: "+", operand: "1"}}
+    {id: "product", type: "math", position: {x: 200, y: 100}, params: {op: "*", operand: "1"}}
+    {id: "out", type: "return", position: {x: 400, y: 50}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "lhs", from_port: "output", to: "sum", to_port: "input"}
+    {id: "e2", from: "rhs", from_port: "output", to: "sum", to_port: "operand"}
+    {id: "e3", from: "lhs", from_port: "output", to: "product", to_port: "input"}
+    {id: "e4", from: "rhs", from_port: "output", to: "product", to_port: "operand"}
+    {id: "e5", from: "sum", from_port: "output", to: "out", to_port: "input"}
+  ]
+}

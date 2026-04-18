@@ -1,0 +1,19 @@
+{
+  nodes: [
+    {id: "a", type: "const", position: {x: 0, y: 0}, params: {value: "10"}}
+    {id: "b", type: "const", position: {x: 0, y: 80}, params: {value: "20"}}
+    {id: "c", type: "const", position: {x: 0, y: 160}, params: {value: "30"}}
+    {id: "sum1", type: "math", position: {x: 200, y: 0}, params: {op: "+", operand: "0"}}
+    {id: "sum2", type: "math", position: {x: 200, y: 160}, params: {op: "+", operand: "0"}}
+    {id: "total", type: "math", position: {x: 400, y: 80}, params: {op: "+", operand: "0"}}
+    {id: "out", type: "return", position: {x: 600, y: 80}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "a", from_port: "output", to: "sum1", to_port: "input"}
+    {id: "e2", from: "b", from_port: "output", to: "sum1", to_port: "operand"}
+    {id: "e3", from: "c", from_port: "output", to: "sum2", to_port: "input"}
+    {id: "e4", from: "sum2", from_port: "output", to: "total", to_port: "input"}
+    {id: "e5", from: "sum1", from_port: "output", to: "total", to_port: "operand"}
+    {id: "e6", from: "total", from_port: "output", to: "out", to_port: "input"}
+  ]
+}

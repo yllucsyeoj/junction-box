@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
-import { writeFileSync, readFileSync, unlinkSync, readdirSync, existsSync } from 'node:fs'
+import { writeFileSync, readFileSync, appendFileSync, unlinkSync, readdirSync, existsSync, mkdirSync } from 'node:fs'
 import { loadSpec } from './spec'
 import { runPipeline, type SSEEvent } from './execute'
 import { validateGraph } from './validate'
@@ -11,12 +11,30 @@ const app = new Hono()
 app.use('/*', cors())
 
 const ROOT = resolve(import.meta.dir, '..')
-const PATCHES_DIR = resolve(ROOT, 'patches')
+const DATA_DIR = process.env.GONUDE_DATA_DIR ? resolve(process.env.GONUDE_DATA_DIR) : resolve(ROOT, 'data')
+const PATCHES_DIR = resolve(DATA_DIR, 'patches')
+const LOG_FILE = resolve(DATA_DIR, 'runs.jsonl')
+const SERVER_START = Date.now()
+
+// Ensure data directories exist (important for fresh Docker volumes)
+mkdirSync(PATCHES_DIR, { recursive: true })
 
 // Load node spec once at startup
 console.log('Loading node spec...')
 const nodeSpec = await loadSpec()
 console.log(`Loaded ${nodeSpec.length} primitives`)
+console.log(`Data directory: ${DATA_DIR}`)
+
+// ---------------------------------------------------------------------------
+// Utility: append a structured log entry to runs.jsonl
+// ---------------------------------------------------------------------------
+function logRun(entry: Record<string, unknown>): void {
+  try {
+    appendFileSync(LOG_FILE, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n')
+  } catch {
+    // Non-fatal — don't let logging break execution
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Utility: parse a NUON string into a Graph object.
@@ -39,6 +57,16 @@ function nuonToGraph(nuonText: string): { ok: true; graph: unknown } | { ok: fal
     try { unlinkSync(tmpPath) } catch {}
   }
 }
+
+// ---------------------------------------------------------------------------
+// GET /health — uptime, version, primitive count
+// ---------------------------------------------------------------------------
+app.get('/health', (c) => c.json({
+  status: 'ok',
+  uptime_ms: Date.now() - SERVER_START,
+  primitives: nodeSpec.length,
+  data_dir: DATA_DIR,
+}))
 
 // ---------------------------------------------------------------------------
 // GET /nodes — full node spec (what primitives exist, their ports + params)
@@ -125,16 +153,20 @@ app.get('/defs', (c) => {
 // ---------------------------------------------------------------------------
 app.post('/exec', async (c) => {
   const contentType = c.req.header('content-type') ?? ''
+  const t0 = Date.now()
 
   let graph: unknown
+  let alias: string | null = null
 
   if (contentType.includes('application/json')) {
     const body = await c.req.json()
     // Support alias shorthand: {"alias": "my-patch"}
     if (body && typeof body === 'object' && 'alias' in body) {
-      const aliasPath = resolve(PATCHES_DIR, `${body.alias}.json`)
+      alias = String(body.alias)
+      const aliasPath = resolve(PATCHES_DIR, `${alias}.json`)
       if (!existsSync(aliasPath)) {
-        return c.json({ status: 'error', fatal: `Patch alias "${body.alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
+        logRun({ type: 'exec', alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
+        return c.json({ status: 'error', fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
       }
       graph = JSON.parse(readFileSync(aliasPath, 'utf8')).graph
     } else {
@@ -145,6 +177,7 @@ app.post('/exec', async (c) => {
     const nuonText = await c.req.text()
     const parsed = nuonToGraph(nuonText)
     if (!parsed.ok) {
+      logRun({ type: 'exec', alias, status: 'error', fatal: 'nuon_parse_error', duration_ms: Date.now() - t0 })
       return c.json({ status: 'error', fatal: `NUON parse error: ${parsed.error}`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 400)
     }
     graph = parsed.graph
@@ -153,6 +186,7 @@ app.post('/exec', async (c) => {
   // Pre-execution validation
   const validationErrors = validateGraph(graph as any, nodeSpec)
   if (validationErrors.length > 0) {
+    logRun({ type: 'exec', alias, status: 'error', fatal: 'validation', node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 })
     return c.json({
       status: 'error',
       fatal: null,
@@ -184,24 +218,29 @@ app.post('/exec', async (c) => {
     fatalError = err instanceof Error ? err.message : String(err)
   }
 
+  const g = graph as { nodes: Array<{ id: string; type: string }> }
+  const nodeCount = g.nodes?.length ?? 0
+
   if (fatalError || Object.keys(errors).length > 0) {
+    logRun({ type: 'exec', alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 })
     return c.json({ status: 'error', errors, fatal: fatalError, validation_errors: [], skipped, outputs, result: null }, 500)
   }
 
   // Find the "result" value: first return node, or last node in execution order
-  const g = graph as { nodes: Array<{ id: string; type: string }> }
   const returnNode = g.nodes.find(n => n.type === 'return')
   const result = returnNode
     ? (outputs[returnNode.id] ?? null)
     : (Object.values(outputs).at(-1) ?? null)
 
+  logRun({ type: 'exec', alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 })
   return c.json({ status: 'complete', validation_errors: [], errors: {}, skipped, outputs, result })
 })
 
 // ---------------------------------------------------------------------------
 // POST /patch — store a patch with an alias
 // GET  /patch/:alias — retrieve a stored patch
-// GET  /patches — list all stored patches
+// GET  /patches — list all stored patches (alias, description, node_types, created_at)
+// DELETE /patch/:alias — remove a stored patch
 // ---------------------------------------------------------------------------
 app.post('/patch', async (c) => {
   const body = await c.req.json()
@@ -209,6 +248,9 @@ app.post('/patch', async (c) => {
 
   if (!alias || typeof alias !== 'string' || !/^[a-z0-9_-]+$/.test(alias)) {
     return c.json({ error: 'alias must be a lowercase alphanumeric string (hyphens/underscores ok)' }, 400)
+  }
+  if (!description || typeof description !== 'string' || description.trim() === '') {
+    return c.json({ error: 'description is required — explain what this patch does so models can understand it' }, 400)
   }
   if (!graph || typeof graph !== 'object') {
     return c.json({ error: 'graph is required' }, 400)
@@ -220,8 +262,9 @@ app.post('/patch', async (c) => {
     return c.json({ error: 'Graph validation failed — patch not stored.', validation_errors: validationErrors }, 422)
   }
 
-  const record = { alias, description: description ?? '', graph, created_at: new Date().toISOString() }
+  const record = { alias, description: description.trim(), graph, created_at: new Date().toISOString() }
   writeFileSync(resolve(PATCHES_DIR, `${alias}.json`), JSON.stringify(record, null, 2))
+  logRun({ type: 'patch_save', alias })
   return c.json({ ok: true, alias })
 })
 
@@ -234,17 +277,61 @@ app.get('/patch/:alias', (c) => {
   return c.json(JSON.parse(readFileSync(filePath, 'utf8')))
 })
 
+app.delete('/patch/:alias', (c) => {
+  const alias = c.req.param('alias')
+  const filePath = resolve(PATCHES_DIR, `${alias}.json`)
+  if (!existsSync(filePath)) {
+    return c.json({ error: `Patch "${alias}" not found.` }, 404)
+  }
+  unlinkSync(filePath)
+  logRun({ type: 'patch_delete', alias })
+  return c.json({ ok: true, alias })
+})
+
 app.get('/patches', (c) => {
   const files = existsSync(PATCHES_DIR)
-    ? readdirSync(PATCHES_DIR).filter(f => f.endsWith('.json') && f !== '.gitkeep.json')
+    ? readdirSync(PATCHES_DIR).filter(f => f.endsWith('.json'))
     : []
   const list = files.map(f => {
     try {
-      const { alias, description, created_at } = JSON.parse(readFileSync(resolve(PATCHES_DIR, f), 'utf8'))
-      return { alias, description, created_at }
+      const record = JSON.parse(readFileSync(resolve(PATCHES_DIR, f), 'utf8'))
+      const node_types: string[] = [...new Set<string>(
+        (record.graph?.nodes ?? []).map((n: { type: string }) => n.type)
+      )]
+      return {
+        alias: record.alias,
+        description: record.description,
+        node_types,
+        node_count: record.graph?.nodes?.length ?? 0,
+        created_at: record.created_at,
+      }
     } catch { return null }
   }).filter(Boolean)
   return c.json(list)
+})
+
+// ---------------------------------------------------------------------------
+// GET /logs?limit=N — recent run log entries (default 50, max 500)
+// ---------------------------------------------------------------------------
+app.get('/logs', (c) => {
+  const limitParam = parseInt(c.req.query('limit') ?? '50', 10)
+  const limit = Math.min(Math.max(1, isNaN(limitParam) ? 50 : limitParam), 500)
+
+  if (!existsSync(LOG_FILE)) {
+    return c.json([])
+  }
+
+  const lines = readFileSync(LOG_FILE, 'utf8')
+    .split('\n')
+    .filter(l => l.trim() !== '')
+
+  const entries = lines
+    .slice(-limit)
+    .map(l => { try { return JSON.parse(l) } catch { return null } })
+    .filter(Boolean)
+    .reverse()
+
+  return c.json(entries)
 })
 
 // ---------------------------------------------------------------------------

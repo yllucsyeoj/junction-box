@@ -1,0 +1,13 @@
+{
+  nodes: [
+    {id: "lhs", type: "const", position: {x: 0, y: 0}, params: {value: '"Hello "'}}
+    {id: "rhs", type: "const", position: {x: 0, y: 100}, params: {value: '"World"'}}
+    {id: "merge", type: "str-concat", position: {x: 200, y: 50}, params: {prefix: "", suffix: ""}}
+    {id: "out", type: "return", position: {x: 400, y: 50}, params: {}}
+  ],
+  edges: [
+    {id: "e1", from: "lhs", from_port: "output", to: "merge", to_port: "input"}
+    {id: "e2", from: "rhs", from_port: "output", to: "merge", to_port: "suffix"}
+    {id: "e3", from: "merge", from_port: "output", to: "out", to_port: "input"}
+  ]
+}
