@@ -278,3 +278,46 @@ export def "prim-youtube-transcript" [
     | str replace --all "&quot;" "\""
     | str replace --all "&#34;"  "\""
 }
+
+# Search YouTube for videos matching a query
+export def "prim-youtube-search" [
+    --query: string = ""    # Search terms
+    --limit: string = "10"  # Max number of results to return
+]: nothing -> table {
+    if ($query | is-empty) {
+        error make {msg: "provide --query with search terms"}
+    }
+
+    let encoded = ($query | url encode)
+    let html    = (http get
+        -H {User-Agent: $YT_UA}
+        $"https://www.youtube.com/results?search_query=($encoded)")
+
+    let data = ($html | yt_extract_page_json "var ytInitialData = ")
+
+    let section = (try {
+        $data.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents
+        | where {|c| "itemSectionRenderer" in ($c | columns)}
+        | first
+        | get itemSectionRenderer.contents
+    } catch {
+        error make {msg: "Could not parse search results — YouTube page structure may have changed"}
+    })
+
+    let videos = ($section | where {|item| "videoRenderer" in ($item | columns)})
+    let n      = ($limit | into int)
+    let take   = ([$n ($videos | length)] | math min)
+
+    $videos | first $take | each {|item|
+        let v = $item.videoRenderer
+        {
+            video_id:    (try { $v.videoId                                                                          } catch { "" })
+            title:       (try { $v.title.runs | first | get text                                                    } catch { "" })
+            channel:     (try { $v.ownerText.runs | first | get text                                                } catch { "" })
+            channel_id:  (try { $v.ownerText.runs | first | get navigationEndpoint.browseEndpoint.browseId          } catch { "" })
+            published:   (try { $v.publishedTimeText.simpleText                                                     } catch { "" })
+            description: (try { $v.detailedMetadataSnippets | first | get snippetText.runs | each { get text } | str join " " } catch { "" })
+            views:       (try { $v.viewCountText.simpleText                                                         } catch { "" })
+        }
+    }
+}
