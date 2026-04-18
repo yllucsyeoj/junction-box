@@ -87,17 +87,28 @@ export async function runPipeline(
     // inputEdge already found above for skipping logic — reuse it here
     const pipelineInput = inputEdge ? (outputs.get(inputEdge.from) ?? null) : null
 
-    // Resolve params — edge-connected params come from env vars
+    // Resolve params — edge-connected params come from env vars.
+    // Collect all param names: both statically set AND wired-only (absent from node.params).
     const paramEnv: Record<string, string> = {}
     const resolvedFlags: string[] = []
 
-    for (const [paramName, paramValue] of Object.entries(node.params)) {
+    const wiredPorts = new Set(
+      graph.edges
+        .filter(e => e.to === nodeId && e.to_port !== 'input')
+        .map(e => e.to_port)
+    )
+    const allParamNames = new Set([...Object.keys(node.params), ...wiredPorts])
+
+    for (const paramName of allParamNames) {
+      const paramValue = node.params[paramName] ?? ''
       const paramEdge = graph.edges.find(e => e.to === nodeId && e.to_port === paramName)
       if (paramEdge) {
-        // Pass edge value via environment variable
+        // Pass edge value via environment variable as raw NUON string.
+        // Primitives with wirable params are typed --param: string and parse internally
+        // (e.g. $items | from nuon, $operand | into float) — don't pre-parse here.
         const envKey = `GONUDE_PARAM_${paramName.toUpperCase()}`
         paramEnv[envKey] = outputs.get(paramEdge.from) ?? 'null'
-        resolvedFlags.push(`--${paramName} ($env.${envKey} | from nuon)`)
+        resolvedFlags.push(`--${paramName} $env.${envKey}`)
       } else {
         // Escape string value for Nu — wrap in quotes, escape inner quotes
         const escaped = String(paramValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"')

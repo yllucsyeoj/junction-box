@@ -552,11 +552,14 @@ export def "prim-url-decode" []: string -> string {
 export def "prim-append" [
     --items: string = "[]"           # NUON list or value to append (wire an edge to this port for multi-input)
 ]: any -> list {
+    let input = $in   # capture before any branching — $in is consumed on first use
     let extra = ($items | from nuon)
-    if ($extra | describe | str starts-with 'list') {
-        $in | append $extra
+    let desc = ($extra | describe)
+    # tables describe as "table<...>", lists as "list<...>" — both are sequences we flatten in
+    if ($desc | str starts-with 'list') or ($desc | str starts-with 'table') {
+        $input | append $extra
     } else {
-        $in | append [$extra]
+        $input | append [$extra]
     }
 }
 

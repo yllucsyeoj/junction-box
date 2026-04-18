@@ -9,7 +9,7 @@ const COMPAT: Record<string, string[]> = {
   int:      ['any', 'number', 'int'],
   float:    ['any', 'number', 'float'],
   bool:     ['any', 'bool'],
-  table:    ['any', 'table'],
+  table:    ['any', 'table', 'list', 'list<any>'],  // Nu treats list<record> as a table
   list:     ['any', 'list', 'table'],   // tables are lists of records — loose but practical
   record:   ['any', 'record'],
   datetime: ['any', 'datetime'],
