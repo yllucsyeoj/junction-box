@@ -1,0 +1,13 @@
+node_modules
+server/node_modules
+.git
+.gitignore
+frontend
+docs
+tests
+demos
+data
+*.nuon
+test.json
+testex.csv
+tsla10k.csv
