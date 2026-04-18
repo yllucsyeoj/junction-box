@@ -1,7 +1,16 @@
+import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { toposort } from './toposort'
 
 const ROOT = resolve(import.meta.dir, '..')
+
+function buildUseLines(): string {
+  const extDir = resolve(ROOT, 'extensions')
+  const exts = existsSync(extDir)
+    ? readdirSync(extDir).filter(f => f.endsWith('.nu')).map(f => `use extensions/${f} *`)
+    : []
+  return ['use primitives.nu *', ...exts].join('; ')
+}
 
 interface GraphNode { id: string; type: string; params: Record<string, unknown> }
 interface GraphEdge { id: string; from: string; from_port: string; to: string; to_port: string }
@@ -10,8 +19,43 @@ interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
 export type SSEEvent =
   | { node_id: string; status: 'running' }
   | { node_id: string; status: 'done'; output: string }
-  | { node_id: string; status: 'error'; error: string }
+  | { node_id: string; status: 'error'; error: string; error_type: string }
+  | { node_id: string; status: 'skipped'; reason: string }
   | { status: 'complete' }
+
+// Strip internal file/line references from Nu error output and return a clean message.
+function normalizeNuError(raw: string, nodeType: string, params: Record<string, unknown>): { message: string; error_type: string } {
+  // Remove Nu source location lines like ",-[primitives.nu:209:5]" and surrounding context
+  const stripped = raw
+    .replace(/\s*,?-\[.*?:\d+:\d+\][\s\S]*?`----/g, '')   // strip source context blocks
+    .replace(/Error:\s*nu::[a-z_:]+\n/g, '')                // strip internal error type header
+    .replace(/  x /g, '')                                    // strip Nu "x" prefix
+    .replace(/\n+/g, ' ')
+    .trim()
+
+  // Classify error type from Nu message patterns
+  let error_type = 'runtime'
+  if (raw.includes('pipeline_mismatch') || raw.includes('cant_convert') || raw.includes('type_mismatch')) {
+    error_type = 'type_mismatch'
+  } else if (raw.includes('column_not_found') || raw.includes('CantFindColumn') || raw.includes('cannot find column')) {
+    error_type = 'missing_column'
+  } else if (raw.includes('expected_keyword') || raw.includes('parser')) {
+    error_type = 'syntax'
+  } else if (raw.includes('NotFound') || raw.includes('not found')) {
+    error_type = 'not_found'
+  }
+
+  // Try to add a hint about which param might be wrong based on the message
+  const paramHints: string[] = []
+  for (const [k, v] of Object.entries(params)) {
+    if (stripped.toLowerCase().includes(String(v).toLowerCase().slice(0, 6))) {
+      paramHints.push(k)
+    }
+  }
+  const hint = paramHints.length > 0 ? ` (check param: ${paramHints.join(', ')})` : ''
+
+  return { message: (stripped || raw.trim()) + hint, error_type }
+}
 
 export async function runPipeline(
   graph: Graph,
@@ -23,14 +67,24 @@ export async function runPipeline(
     graph.edges.map(e => ({ from: e.from, to: e.to }))
   )
 
-  const outputs = new Map<string, string>() // node_id -> NUON string
+  const outputs = new Map<string, string>()   // node_id -> NUON string
+  const failed = new Set<string>()            // nodes that errored or were skipped
 
   for (const nodeId of order) {
     const node = graph.nodes.find(n => n.id === nodeId)!
+
+    // If any upstream dependency failed, skip this node rather than running it with null input
+    const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
+    if (inputEdge && failed.has(inputEdge.from)) {
+      emit({ node_id: nodeId, status: 'skipped', reason: `Upstream node "${inputEdge.from}" failed or was skipped.` })
+      failed.add(nodeId)
+      outputs.set(nodeId, 'null')
+      continue
+    }
+
     emit({ node_id: nodeId, status: 'running' })
 
-    // Find upstream pipeline input (primary input port)
-    const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
+    // inputEdge already found above for skipping logic — reuse it here
     const pipelineInput = inputEdge ? (outputs.get(inputEdge.from) ?? null) : null
 
     // Resolve params — edge-connected params come from env vars
@@ -57,7 +111,8 @@ export async function runPipeline(
     const inputExpr = pipelineInput !== null
       ? `("${pipelineInput.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" | from nuon) | `
       : ''
-    const nuScript = `use primitives.nu *; ${inputExpr}${cmdName} ${flagStr} | to nuon`
+    // Wrap command in try/catch — runtime errors become null, pipeline continues
+    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} | to nuon } catch {|e| $"__GONUDE_ERROR:($e.msg)" | to json }`
 
     const proc = Bun.spawnSync(
       ['nu', '-c', nuScript],
@@ -68,15 +123,26 @@ export async function runPipeline(
       }
     )
 
-    if (proc.exitCode !== 0) {
-      const errMsg = Buffer.from(proc.stderr).toString().trim()
-      emit({ node_id: nodeId, status: 'error', error: errMsg })
-      return // Stop on first error
-    }
+    const stdout = Buffer.from(proc.stdout).toString().trim()
+    const stderr = Buffer.from(proc.stderr).toString().trim()
 
-    const output = Buffer.from(proc.stdout).toString().trim()
-    outputs.set(nodeId, output)
-    emit({ node_id: nodeId, status: 'done', output })
+    if (proc.exitCode !== 0) {
+      // Parse/syntax error — Nu couldn't compile the script
+      const { message, error_type } = normalizeNuError(stderr, node.type, node.params)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type })
+      outputs.set(nodeId, 'null')
+      failed.add(nodeId)
+    } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
+      // Runtime error caught by try/catch wrapper
+      const raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+      const { message, error_type } = normalizeNuError(raw, node.type, node.params)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type })
+      outputs.set(nodeId, 'null')
+      failed.add(nodeId)
+    } else {
+      outputs.set(nodeId, stdout)
+      emit({ node_id: nodeId, status: 'done', output: stdout })
+    }
   }
 
   emit({ status: 'complete' })

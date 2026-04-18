@@ -4,38 +4,89 @@
 # Metadata used by scripts/introspect.nu for canvas display and agent use.
 # Keys match the short name (strip "prim-", replace "-" with "_").
 export const PRIMITIVE_META = {
-    fetch: {category: "input", color: "#f97316", agent_hint: "Fetch JSON/table data from a URL via HTTP GET", param_options: {}}
-    const: {category: "input", color: "#f97316", agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_options: {}}
-    env: {category: "input", color: "#f97316", agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
-    file_in: {category: "input", color: "#f97316", agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
-    filter: {category: "transform", color: "#3b82f6", agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"
-             param_options: {op: ["==", "!=", ">", "<", "contains"]}}
-    map: {category: "transform", color: "#3b82f6", agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
-    select: {category: "transform", color: "#3b82f6", agent_hint: "Keep only the named columns from a table (space-separated)", param_options: {}}
-    sort: {category: "transform", color: "#3b82f6", agent_hint: "Sort a table by a column. direction: asc or desc"
-           param_options: {direction: ["asc", "desc"]}}
-    display: {category: "output", color: "#22c55e", agent_hint: "Print the value to stdout — captured in the run log", param_options: {}}
-    file_out: {category: "output", color: "#22c55e", agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
-               param_options: {format: ["nuon", "json", "csv", "text"]}}
-    return: {category: "output", color: "#22c55e", agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
-    llm: {category: "external", color: "#a855f7", agent_hint: "Call an LLM (Anthropic) with a prompt string. Returns the completion text."
-          param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
-    math: {category: "compute", color: "#eab308", agent_hint: "Apply a math operation (+, -, *, /) with an operand to a number"
-           param_options: {op: ["+", "-", "*", "/"]}}
-    string_op: {category: "compute", color: "#eab308", agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace (arg: old:new)"
-                param_options: {op: ["upcase", "downcase", "trim", "length", "split", "replace"]}}
-    type_cast: {category: "compute", color: "#eab308", agent_hint: "Cast a value to a target type: int, float, string, bool"
-                param_options: {target: ["int", "float", "string", "bool"]}}
-    count: {category: "transform", color: "#3b82f6", agent_hint: "Count the number of rows in a table", param_options: {}}
-    first: {category: "transform", color: "#3b82f6", agent_hint: "Return the first N rows of a table", param_options: {}}
-    last: {category: "transform", color: "#3b82f6", agent_hint: "Return the last N rows of a table", param_options: {}}
-    rename: {category: "transform", color: "#3b82f6", agent_hint: "Rename a column: provide old and new column name", param_options: {}}
-    get: {category: "transform", color: "#3b82f6", agent_hint: "Get a field from a record or an index from a list", param_options: {}}
-    http_post: {category: "external", color: "#a855f7", agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
-    to_string: {category: "compute", color: "#eab308", agent_hint: "Format a value as a JSON, NUON, CSV, or text string"
-                param_options: {format: ["json", "nuon", "csv", "text"]}}
-    from_string: {category: "compute", color: "#eab308", agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
-                  param_options: {format: ["json", "nuon", "csv"]}}
+    fetch:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Fetch JSON/table data from a URL via HTTP GET", param_options: {}}
+    const:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_options: {}}
+    env:           {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
+    file_in:       {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
+    ls:            {category: "file",      color: "#f97316", wirable: [],               agent_hint: "List directory contents as a table (name, type, size, modified)", param_options: {}}
+    rm:            {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Remove a file at the given path", param_options: {}}
+    mkdir:         {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Create a directory (and parents) at the given path", param_options: {}}
+    date_now:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Return the current date and time as a datetime value", param_options: {}}
+    filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"
+                   param_options: {op: ["==", "!=", ">", "<", "contains"]}}
+    map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
+    select:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Keep only the named columns from a table (space-separated)", param_options: {}}
+    sort:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Sort a table by a column. direction: asc or desc"
+                   param_options: {direction: ["asc", "desc"]}}
+    count:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Count the number of rows in a table", param_options: {}}
+    first:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the first N rows of a table", param_options: {}}
+    last:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the last N rows of a table", param_options: {}}
+    rename:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rename a column: provide old and new column name", param_options: {}}
+    get:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a field from a record or an index from a list", param_options: {}}
+    merge:         {category: "transform", color: "#3b82f6", wirable: ["with"],         agent_hint: "Merge a NUON record into the input record — overlapping keys overwritten. Wire a record to --with for multi-input.", param_options: {}}
+    reject:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Remove named columns from a table or record (space-separated)", param_options: {}}
+    update:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Update a field in a record/table with a NUON value", param_options: {}}
+    group_by:      {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Group table rows by a column — returns a record keyed by the column values", param_options: {}}
+    reduce:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Reduce a list to a single value: sum, product, min, max, avg, or join"
+                   param_options: {op: ["sum", "product", "min", "max", "avg", "join"]}}
+    uniq:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return unique values from a list (deduplicate)", param_options: {}}
+    append:        {category: "transform", color: "#3b82f6", wirable: ["items"],        agent_hint: "Append to a list. Wire a second list/value to --items for multi-input.", param_options: {}}
+    flatten:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Flatten one level of nesting from a list of lists", param_options: {}}
+    reverse:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Reverse a list or table", param_options: {}}
+    drop:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Skip the first N rows/elements from a list or table", param_options: {}}
+    enumerate:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add a zero-based index field to each element — returns [{index, value}, ...]", param_options: {}}
+    wrap:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Wrap a single value into a one-element list", param_options: {}}
+    join:          {category: "transform", color: "#3b82f6", wirable: ["right"],        agent_hint: "SQL-style join two tables on a shared column. Wire second table to --right port."
+                   param_options: {type: ["inner", "left"]}}
+    table_concat:  {category: "transform", color: "#3b82f6", wirable: ["more"],         agent_hint: "Vertically stack two tables (UNION ALL). Wire the second table to --more port.", param_options: {}}
+    insert_row:    {category: "transform", color: "#3b82f6", wirable: ["row"],          agent_hint: "Append a record as a new row to a table. Wire a record source to --row port.", param_options: {}}
+    col_to_list:   {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract a single column from a table as a flat list.", param_options: {}}
+    col_stats:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Compute count/sum/avg/min/max for a numeric column. Returns a record.", param_options: {}}
+    summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Multi-column aggregate: --cols 'a b' --ops 'avg sum'. Returns a record of col_op keys."
+                   param_options: {ops: ["avg", "sum", "min", "max", "count"]}}
+    null_fill:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Fill null values in a table column with a NUON constant or forward-fill."
+                   param_options: {op: ["const", "ffill"]}}
+    group_agg:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Aggregate a group_by record into a [{group, value}] summary table."
+                   param_options: {op: ["avg", "sum", "min", "max", "count", "first"]}}
+    transpose:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Transpose a table (rows become columns) or convert a record to a [{column, value}] table.", param_options: {}}
+    values:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract the values of a record as a list (complement to columns).", param_options: {}}
+    columns:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract the column names of a table or record as a list.", param_options: {}}
+    zip:           {category: "transform", color: "#3b82f6", wirable: ["right"],        agent_hint: "Zip two parallel lists into a table of records. Wire second list to --right port. --key_a / --key_b name the fields.", param_options: {}}
+    batch:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Split a list into chunks of --size elements. Returns a list of lists.", param_options: {}}
+    window:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rolling N-row window aggregate over a table column. Adds a rolling result column."
+                   param_options: {op: ["avg", "sum", "min", "max"]}}
+    display:       {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Display the value (writes to stderr) and pass it through — safe to use mid-pipeline.", param_options: {}}
+    file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
+                   param_options: {format: ["nuon", "json", "csv", "text"]}}
+    return:        {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
+    llm:           {category: "external",  color: "#a855f7", wirable: ["context"],      agent_hint: "Call an LLM (Anthropic) with a prompt string. Wire system context to --context for multi-input."
+                   param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
+    http_post:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
+    math:          {category: "compute",   color: "#eab308", wirable: ["operand"],      agent_hint: "Apply a math operation (+, -, *, /) to a number. Wire a number to --operand for multi-input."
+                   param_options: {op: ["+", "-", "*", "/"]}}
+    string_op:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace (arg: old:new)"
+                   param_options: {op: ["upcase", "downcase", "trim", "length", "split", "replace"]}}
+    type_cast:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Cast a value to a target type: int, float, string, bool"
+                   param_options: {target: ["int", "float", "string", "bool"]}}
+    math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg on a list or table column"
+                   param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg"]}}
+    each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list. Use $in for the current element. e.g. $in * 2", param_options: {}}
+    str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable.", param_options: {}}
+    str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
+    url_encode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Percent-encode a string for safe use in a URL", param_options: {}}
+    url_decode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a percent-encoded URL string", param_options: {}}
+    to_string:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Format a value as a JSON, NUON, CSV, or text string"
+                   param_options: {format: ["json", "nuon", "csv", "text"]}}
+    from_string:   {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
+                   param_options: {format: ["json", "nuon", "csv"]}}
+    row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row.", param_options: {}}
+    date_format:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Format a datetime as a string using a strftime pattern (default: %Y-%m-%d %H:%M:%S)", param_options: {}}
+    into_datetime: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Parse a string into a datetime value — optionally provide a --fmt strftime pattern", param_options: {}}
+    date_add:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Add a duration to a datetime. amount examples: 1day, 2hr, 30min, -7day", param_options: {}}
+    if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: pass input through if condition is true, else return --fallback NUON value"
+                   param_options: {op: ["==", "!=", ">", "<", "is-empty", "is-not-empty"]}}
+    # NOTE: conditional routing (if/else branching to different downstream nodes) is a
+    # known gap — deferred. Requires graph-level routing, not a single primitive.
 }
 
 # ── Input primitives ──────────────────────────────────────────────────────────
@@ -121,9 +172,10 @@ export def "prim-sort" [
 
 # ── Output primitives ─────────────────────────────────────────────────────────
 
-# Print value to stdout (captured in run log)
-export def "prim-display" []: any -> nothing {
-    print $in
+# Display value (writes to stderr so it doesn't corrupt NUON output) and passes input through
+export def "prim-display" []: any -> any {
+    print --stderr ($in | table)
+    $in
 }
 
 # Write value to a file
@@ -292,5 +344,472 @@ export def "prim-from-string" [
         "csv" => { $in | from csv }
         "nuon" => { $in | from nuon }
         _ => { $in | from json }
+    }
+}
+
+# ── File operation primitives ─────────────────────────────────────────────────
+
+# List directory contents as a table
+export def "prim-ls" [
+    --path: string = "."             # Directory path to list
+]: nothing -> table {
+    ls $path
+}
+
+# Remove a file
+export def "prim-rm" [
+    --path: string = ""              # File path to remove
+]: nothing -> nothing {
+    rm $path
+}
+
+# Create a directory (and any missing parents)
+export def "prim-mkdir" [
+    --path: string = ""              # Directory path to create
+]: nothing -> nothing {
+    mkdir $path
+}
+
+# ── Record / object operation primitives ─────────────────────────────────────
+
+# Merge a NUON record into the input record
+export def "prim-merge" [
+    --with: string = "{}"            # NUON record to merge in (overlapping keys overwritten)
+]: record -> record {
+    $in | merge ($with | from nuon)
+}
+
+# Remove named columns from a table or record
+export def "prim-reject" [
+    --columns: string = ""           # Space-separated column names to remove
+]: any -> any {
+    reject ...($columns | split row " " | where {|c| $c != ""})
+}
+
+# Update a field with a NUON value
+export def "prim-update" [
+    --field: string = ""             # Field name to update
+    --value: string = "null"         # NUON replacement value
+]: any -> any {
+    update $field ($value | from nuon)
+}
+
+# ── Additional collection operation primitives ────────────────────────────────
+
+# Group table rows by a column — returns a record keyed by column values
+export def "prim-group-by" [
+    --column: string = ""            # Column to group by
+]: table -> record {
+    $in | group-by {|x| $x | get $column}
+}
+
+# Reduce a list to a single value
+export def "prim-reduce" [
+    --op: string = "sum"             # Operation: sum, product, min, max, avg, join
+    --sep: string = ", "             # Separator (join only)
+]: list -> any {
+    match $op {
+        "sum"     => { $in | math sum }
+        "product" => { $in | math product }
+        "min"     => { $in | math min }
+        "max"     => { $in | math max }
+        "avg"     => { $in | math avg }
+        "join"    => { $in | str join $sep }
+        _ => { error make {msg: $"Unknown reduce op: ($op). Valid: sum, product, min, max, avg, join"} }
+    }
+}
+
+# Return unique (deduplicated) values from a list
+export def "prim-uniq" []: list -> list {
+    $in | uniq
+}
+
+# ── Extended math primitives ──────────────────────────────────────────────────
+
+# Apply a math function to a number, list, or table column
+export def "prim-math-fn" [
+    --op: string = "round"           # Operation: round, floor, ceil, abs, sum, min, max, avg
+    --column: string = ""            # Column name (for table input — extracts column first)
+]: any -> any {
+    let data = if ($column | is-not-empty) { $in | get $column } else { $in }
+    match $op {
+        "round" => { $data | math round }
+        "floor" => { $data | math floor }
+        "ceil"  => { $data | math ceil }
+        "abs"   => { $data | math abs }
+        "sum"   => { $data | math sum }
+        "min"   => { $data | math min }
+        "max"   => { $data | math max }
+        "avg"   => { $data | math avg }
+        _ => { error make {msg: $"Unknown math fn: ($op). Valid: round, floor, ceil, abs, sum, min, max, avg"} }
+    }
+}
+
+# ── Date / time primitives ────────────────────────────────────────────────────
+
+# Return the current date and time
+export def "prim-date-now" []: nothing -> datetime {
+    date now
+}
+
+# Format a datetime as a string
+export def "prim-date-format" [
+    --fmt: string = "%Y-%m-%d %H:%M:%S"  # strftime format string
+]: datetime -> string {
+    $in | format date $fmt
+}
+
+# Parse a string into a datetime value
+export def "prim-into-datetime" [
+    --fmt: string = ""               # Optional strftime format hint
+]: string -> datetime {
+    if ($fmt | is-empty) {
+        $in | into datetime
+    } else {
+        $in | into datetime --format $fmt
+    }
+}
+
+# Add a duration to a datetime
+export def "prim-date-add" [
+    --amount: string = "1day"        # Duration string: 1day, 2hr, 30min, -7day, etc.
+]: datetime -> datetime {
+    $in + ($amount | into duration)
+}
+
+# ── Logic primitives ──────────────────────────────────────────────────────────
+
+# Conditional gate: pass input through if condition is true, else return fallback
+export def "prim-if" [
+    --column: string = ""            # Field to test (empty = test the whole input value)
+    --op: string = "=="              # Operator: ==, !=, >, <, is-empty, is-not-empty
+    --value: string = ""             # Comparison value (not used for is-empty / is-not-empty)
+    --fallback: string = "null"      # NUON value returned when condition is false
+]: any -> any {
+    let v = $in
+    let subject = if ($column | is-not-empty) { $v | get $column } else { $v }
+    let passes = match $op {
+        "=="          => { ($subject | into string) == $value }
+        "!="          => { ($subject | into string) != $value }
+        ">"           => { ($subject | into float) > ($value | into float) }
+        "<"           => { ($subject | into float) < ($value | into float) }
+        "is-empty"    => { $subject | is-empty }
+        "is-not-empty" => { not ($subject | is-empty) }
+        _ => { error make {msg: $"Unknown op: ($op). Valid: ==, !=, >, <, is-empty, is-not-empty"} }
+    }
+    if $passes { $v } else { $fallback | from nuon }
+}
+
+# ── Each / loop primitive ─────────────────────────────────────────────────────
+
+# Apply a Nu expression to every element of a list ($in = current element)
+export def "prim-each" [
+    --expr: string = "$in"           # Nu expression — use $in for the current element (e.g. $in * 2)
+]: list -> list {
+    $in | each {|it|
+        nu -c $"(($it | to nuon)) | do { ($expr) } | to nuon"
+        | from nuon
+    }
+}
+
+# ── String primitives ─────────────────────────────────────────────────────────
+
+# Concatenate strings — prepend prefix and/or append suffix
+export def "prim-str-concat" [
+    --prefix: string = ""            # String to prepend (or wire an edge to this port)
+    --suffix: string = ""            # String to append  (or wire an edge to this port)
+]: string -> string {
+    $"($prefix)($in)($suffix)"
+}
+
+# Template string interpolation — replace {field} placeholders from a record
+export def "prim-str-interp" [
+    --template: string = ""          # Template with {field} placeholders e.g. "Hello {name}!"
+]: record -> string {
+    let rec = $in
+    mut result = $template
+    for key in ($rec | columns) {
+        let placeholder = ("{" + $key + "}")
+        let val = $"($rec | get $key)"
+        $result = ($result | str replace --all $placeholder $val)
+    }
+    $result
+}
+
+# Percent-encode a string for safe use in a URL
+export def "prim-url-encode" []: string -> string {
+    $in | url encode
+}
+
+# Decode a percent-encoded URL string
+export def "prim-url-decode" []: string -> string {
+    $in | url decode
+}
+
+# ── List primitives ───────────────────────────────────────────────────────────
+
+# Append a NUON list or single value to the input list
+export def "prim-append" [
+    --items: string = "[]"           # NUON list or value to append (wire an edge to this port for multi-input)
+]: any -> list {
+    let extra = ($items | from nuon)
+    if ($extra | describe | str starts-with 'list') {
+        $in | append $extra
+    } else {
+        $in | append [$extra]
+    }
+}
+
+# Flatten one level of nesting from a list of lists
+export def "prim-flatten" []: list -> list {
+    $in | flatten
+}
+
+# Reverse a list or table
+export def "prim-reverse" []: any -> any {
+    $in | reverse
+}
+
+# Skip the first N rows/elements
+export def "prim-drop" [
+    --n: string = "1"                # Number of rows/elements to skip
+]: any -> any {
+    $in | skip ($n | into int)
+}
+
+# Add a zero-based index to each element — returns [{index, value}, ...]
+export def "prim-enumerate" []: any -> table {
+    $in | enumerate | each {|it| {index: $it.index, value: $it.item}}
+}
+
+# Wrap a single value into a one-element list
+export def "prim-wrap" []: any -> list {
+    [$in]
+}
+
+# ── Join primitive (multi-input) ──────────────────────────────────────────────
+
+# SQL-style join two tables on a shared column
+# Wire a second table to the --right port to use as a multi-input node
+export def "prim-join" [
+    --right: string = "[]"           # Right table as NUON (wire an edge to this port)
+    --on: string = ""                # Column name to join on
+    --type: string = "inner"         # Join type: inner or left
+]: table -> table {
+    let r = ($right | from nuon)
+    if $type == "left" {
+        $in | join $r $on --left
+    } else {
+        $in | join $r $on
+    }
+}
+
+# ── Multi-source table primitives ─────────────────────────────────────────────
+
+# Vertically stack two tables (UNION ALL equivalent)
+# Wire a second table to the --more port for multi-input use
+export def "prim-table-concat" [
+    --more: string = "[]"            # Second table as NUON (wire an edge to this port)
+]: table -> table {
+    let extra = ($more | from nuon)
+    $in | append $extra
+}
+
+# Append a record as a new row to a table
+# Wire a record source to the --row port for multi-input use
+export def "prim-insert-row" [
+    --row: string = "{}"             # Record to append as NUON (wire an edge to this port)
+]: table -> table {
+    let r = ($row | from nuon)
+    $in | append [$r]
+}
+
+# ── Column-level primitives ───────────────────────────────────────────────────
+
+# Extract a single column from a table as a flat list
+export def "prim-col-to-list" [
+    --column: string = ""            # Column name to extract
+]: table -> list {
+    $in | get $column
+}
+
+# Compute summary statistics for a numeric column — returns a record
+export def "prim-col-stats" [
+    --column: string = ""            # Column to compute stats on
+]: table -> record {
+    let col = ($in | get $column)
+    {
+        count: ($col | length)
+        sum:   ($col | math sum)
+        avg:   ($col | math avg)
+        min:   ($col | math min)
+        max:   ($col | math max)
+    }
+}
+
+# Multi-column aggregate — returns a flat record with {col_op: value} keys
+# --cols and --ops are parallel space-separated lists (e.g. "price volume", "avg sum")
+export def "prim-summarize" [
+    --cols: string = ""              # Space-separated column names (e.g. "price volume")
+    --ops: string = ""               # Space-separated ops per column (avg sum min max count)
+]: table -> record {
+    let tbl = $in
+    let col_list = ($cols | split row " " | where {|c| $c != ""})
+    let op_list  = ($ops  | split row " " | where {|o| $o != ""})
+    mut result = {}
+    for i in 0..<($col_list | length) {
+        let col = ($col_list | get $i)
+        let op  = ($op_list  | get $i)
+        let vals = ($tbl | get $col)
+        let v = match $op {
+            "avg"   => { $vals | math avg }
+            "sum"   => { $vals | math sum }
+            "min"   => { $vals | math min }
+            "max"   => { $vals | math max }
+            "count" => { $vals | length }
+            _ => { null }
+        }
+        $result = ($result | upsert $"($col)_($op)" $v)
+    }
+    $result
+}
+
+# Fill null/empty values in a table column
+# op: const (fill with --value) or ffill (forward-fill from previous non-null)
+export def "prim-null-fill" [
+    --column: string = ""            # Column to fill nulls in
+    --op: string = "const"           # Strategy: const or ffill
+    --value: string = "null"         # NUON fill value (used when op is const)
+]: table -> table {
+    let tbl = $in
+    let fill = ($value | from nuon)
+    if $op == "ffill" {
+        $tbl
+        | reduce --fold {last: null, rows: []} {|row, acc|
+            let v = ($row | get $column)
+            let fill_val = if ($v == null) or ($v | is-empty) { $acc.last } else { $v }
+            {last: $fill_val, rows: ($acc.rows | append [($row | upsert $column $fill_val)])}
+        }
+        | get rows
+    } else {
+        $tbl | upsert $column {|row|
+            let v = ($row | get $column)
+            if ($v == null) or ($v | is-empty) { $fill } else { $v }
+        }
+    }
+}
+
+# ── Group aggregation ─────────────────────────────────────────────────────────
+
+# Aggregate a group_by record into a [{group, value}] summary table
+# Takes the record output of prim-group-by and summarises a column per group
+export def "prim-group-agg" [
+    --column: string = ""            # Column to aggregate within each group
+    --op: string = "avg"             # Aggregation: avg, sum, min, max, count, first
+]: record -> table {
+    let groups = $in
+    $groups | items {|key, rows|
+        let vals = ($rows | get $column)
+        let v = match $op {
+            "sum"   => { $vals | math sum }
+            "min"   => { $vals | math min }
+            "max"   => { $vals | math max }
+            "avg"   => { $vals | math avg }
+            "count" => { $vals | length }
+            "first" => { $vals | first }
+            _ => { null }
+        }
+        {group: $key, value: $v}
+    }
+}
+
+# ── Shape / structure primitives ──────────────────────────────────────────────
+
+# Transpose: pivot a table (rows↔columns) or convert a record to [{column, value}]
+export def "prim-transpose" []: any -> any {
+    $in | transpose
+}
+
+# Extract the values of a record as a list (complement to columns)
+export def "prim-values" []: record -> list {
+    $in | values
+}
+
+# Extract the column names of a table or record as a list
+export def "prim-columns" []: any -> list {
+    $in | columns
+}
+
+# ── Parallel-stream primitives ────────────────────────────────────────────────
+
+# Zip two parallel lists into a table of records
+# Wire the second list to --right; use --key_a / --key_b to name the fields
+export def "prim-zip" [
+    --right: string = "[]"           # Right list as NUON (wire an edge to this port)
+    --key_a: string = "left"         # Field name for left-side values
+    --key_b: string = "right"        # Field name for right-side values
+]: list -> table {
+    let r = ($right | from nuon)
+    $in | zip $r | each {|pair|
+        {($key_a): ($pair | get 0), ($key_b): ($pair | get 1)}
+    }
+}
+
+# ── Chunking / windowing ──────────────────────────────────────────────────────
+
+# Split a list into chunks of --size elements — returns a list of lists
+export def "prim-batch" [
+    --size: string = "10"            # Number of elements per chunk
+]: list -> list {
+    $in | chunks ($size | into int)
+}
+
+# Rolling N-row window aggregate over a table column — adds a new result column
+export def "prim-window" [
+    --column: string = ""            # Column to aggregate
+    --size: string = "3"             # Window size (number of rows)
+    --op: string = "avg"             # Operation: avg, sum, min, max
+    --as_col: string = ""            # Output column name (default: rolling_{op}_{column})
+]: table -> table {
+    let n = ($size | into int)
+    let out_col = if ($as_col | is-empty) { $"rolling_($op)_($column)" } else { $as_col }
+    let tbl = $in
+    let len = ($tbl | length)
+    mut rows = []
+    for i in 0..<$len {
+        let raw = $i - $n + 1
+        let start = if $raw < 0 { 0 } else { $raw }
+        let window = ($tbl | skip $start | first ($i - $start + 1) | get $column)
+        let v = match $op {
+            "sum" => { $window | math sum }
+            "min" => { $window | math min }
+            "max" => { $window | math max }
+            _ =>     { $window | math avg }
+        }
+        $rows = ($rows | append [($tbl | get $i | upsert $out_col $v)])
+    }
+    $rows
+}
+
+# ── Row-wise compute primitive (pandas apply equivalent) ──────────────────────
+
+# Apply a Nu expression to every row of a table ($in = the current row as a record).
+# If --as_col is set, the result is added as a new column and the row is preserved.
+# If --as_col is empty, the expression must return a record to replace the whole row.
+export def "prim-row-apply" [
+    --expr: string = "$in"           # Nu expression — $in is the current row (record)
+    --as_col: string = ""            # If set, store result here; else expression must return a record
+]: table -> table {
+    let tbl = $in
+    $tbl | each {|row|
+        let result = (
+            nu -c $"(($row | to nuon)) | do { ($expr) } | to nuon"
+            | from nuon
+        )
+        if ($as_col | is-empty) {
+            $result
+        } else {
+            $row | upsert $as_col $result
+        }
     }
 }
