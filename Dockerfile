@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
-# Install Nushell (multi-arch: amd64 or arm64)
+# Install Nushell + nu_plugin_query (multi-arch: amd64 or arm64)
 ARG NU_VERSION=0.111.0
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
@@ -19,7 +19,10 @@ RUN case "${TARGETARCH}" in \
       *)     NU_ARCH="x86_64-unknown-linux-musl"  ;; \
     esac && \
     curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-${NU_ARCH}.tar.gz" \
-    | tar -xz --strip-components=1 -C /usr/local/bin "nu-${NU_VERSION}-${NU_ARCH}/nu"
+    | tar -xz --strip-components=1 -C /usr/local/bin \
+        "nu-${NU_VERSION}-${NU_ARCH}/nu" \
+        "nu-${NU_VERSION}-${NU_ARCH}/nu_plugin_query" && \
+    nu -c "plugin add /usr/local/bin/nu_plugin_query"
 
 WORKDIR /app
 
