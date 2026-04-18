@@ -346,4 +346,4 @@ app.post('/parse-nuon', async (c) => {
   return c.json(parsed.graph)
 })
 
-export default { port: 3001, fetch: app.fetch }
+export default { port: 3001, hostname: '0.0.0.0', fetch: app.fetch }
