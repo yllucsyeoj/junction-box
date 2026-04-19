@@ -59,7 +59,8 @@ export const PRIMITIVE_META = {
     file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
                    param_options: {format: ["nuon", "json", "csv", "text"]}}
     return:        {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
-    llm:           {category: "external",  color: "#a855f7", wirable: ["context"],      agent_hint: "Call an LLM (Anthropic) with a prompt string. Wire system context to --context for multi-input."
+    llm:           {category: "external",  color: "#a855f7", wirable: ["context", "endpoint"],
+                   agent_hint: "Call an LLM. Default: Anthropic cloud (needs ANTHROPIC_API_KEY env var). Set --endpoint to any OpenAI-compatible URL for local models — e.g. http://localhost:1234/v1/chat/completions for LM Studio (no key needed, set api_key_env to 'none')."
                    param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
     http_post:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
     math:          {category: "compute",   color: "#eab308", wirable: ["operand"],      agent_hint: "Apply a math operation (+, -, *, /) to a number. Wire a number to --operand for multi-input."
@@ -198,25 +199,43 @@ export def "prim-return" []: any -> any {
 
 # ── External primitives ───────────────────────────────────────────────────────
 
-# Call an LLM (Anthropic Messages API) with a prompt
+# Call an LLM — supports Anthropic (default) or any OpenAI-compatible endpoint (LM Studio, OpenAI, etc.)
 export def "prim-llm" [
-    --model: string = "claude-haiku-4-5-20251001"  # Anthropic model ID
-    --context: string = ""                          # Optional system context prepended to prompt
+    --model:       string = "claude-haiku-4-5-20251001"  # Model ID
+    --endpoint:    string = ""    # API URL. Empty = Anthropic cloud. E.g. http://localhost:1234/v1/chat/completions for LM Studio
+    --api_key_env: string = ""    # Env var holding API key. Empty = auto (ANTHROPIC_API_KEY or LLM_API_KEY). Set to "none" for no auth
+    --context:     string = ""    # Optional system context prepended to the prompt (wirable)
+    --max_tokens:  string = "1024"  # Max tokens to generate
 ]: string -> string {
-    let prompt = if ($context | is-empty) { $in } else { $"($context)\n\n($in)" }
-    let body = {
-        model: $model
-        max_tokens: 1024
-        messages: [{role: "user", content: $prompt}]
-    }
-    let response = (http post "https://api.anthropic.com/v1/messages"
-        --headers {
-            x-api-key: $env.ANTHROPIC_API_KEY
-            anthropic-version: "2023-06-01"
-            content-type: "application/json"
+    let use_anthropic = ($endpoint | is-empty)
+    let url = if $use_anthropic { "https://api.anthropic.com/v1/messages" } else { $endpoint }
+
+    # Resolve API key from named env var
+    let key_env = if ($api_key_env | is-empty) {
+        if $use_anthropic { "ANTHROPIC_API_KEY" } else { "LLM_API_KEY" }
+    } else { $api_key_env }
+    let api_key = if $key_env == "none" { "" } else { try { $env | get $key_env } catch { "" } }
+
+    let input = $in
+    let prompt = if ($context | is-empty) { $input } else { $"($context)\n\n($input)" }
+    let max_tok = ($max_tokens | into int)
+
+    if $use_anthropic {
+        let body = {model: $model, max_tokens: $max_tok, messages: [{role: "user", content: $prompt}]}
+        let resp = (http post $url
+            --headers {x-api-key: $api_key, anthropic-version: "2023-06-01", content-type: "application/json"}
+            ($body | to json))
+        $resp | get content.0.text
+    } else {
+        let body = {model: $model, max_tokens: $max_tok, messages: [{role: "user", content: $prompt}]}
+        let headers = if ($api_key | is-empty) {
+            {content-type: "application/json"}
+        } else {
+            {Authorization: $"Bearer ($api_key)", content-type: "application/json"}
         }
-        ($body | to json))
-    $response | get content.0.text
+        let resp = (http post $url --headers $headers ($body | to json))
+        $resp | get choices.0.message.content
+    }
 }
 
 # ── Compute primitives ────────────────────────────────────────────────────────
