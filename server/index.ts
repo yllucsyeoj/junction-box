@@ -281,24 +281,14 @@ app.post('/exec', async (c) => {
   }
 
   // Find the "result" value: first return node, or last node in execution order.
-  // Unwrap NUON string values so to-json/to-csv/to-text output arrives as a raw
-  // string rather than a NUON-quoted string — callers get the format they asked for.
+  // Return nodes emit raw text (string pass-through or JSON) so we just try
+  // JSON.parse — if it succeeds the caller gets a real value, otherwise a string.
   const returnNode = g.nodes.find(n => n.type === 'return')
   const rawResult = returnNode
     ? (outputs[returnNode.id] ?? null)
     : (Object.values(outputs).at(-1) ?? null)
-  const result = (() => {
-    if (rawResult === null) return null
-    // Unwrap NUON string wrapper: NUON quotes strings as "..." with \" escaping
-    // but allows literal newlines, so JSON.parse fails on multiline values.
-    // Strip outer quotes and unescape manually instead.
-    if (rawResult.startsWith('"') && rawResult.endsWith('"')) {
-      const str = rawResult.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-      // If the unwrapped content is valid JSON (e.g. from to-json), embed as real value
-      try { return JSON.parse(str) } catch {}
-      return str  // plain string (CSV, text, etc.)
-    }
-    return rawResult  // non-string NUON (number, table, etc.) — return as-is
+  const result = rawResult === null ? null : (() => {
+    try { return JSON.parse(rawResult) } catch { return rawResult }
   })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)

@@ -134,8 +134,13 @@ export async function runPipeline(
     const inputExpr = pipelineInput !== null
       ? `("${pipelineInput.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" | from nuon) | `
       : ''
-    // Wrap command in try/catch — runtime errors become null, pipeline continues
-    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} | to nuon } catch {|e| $"__GONUDE_ERROR:($e.msg)" | to json }`
+    // Return nodes: emit raw output (string pass-through, else to json) so the
+    // API result field needs no unwrapping. All other nodes use NUON for the
+    // inter-node wire format.
+    const serialize = node.type === 'return'
+      ? '| if ($in | describe) == "string" { $in } else { $in | to json }'
+      : '| to nuon'
+    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.msg)" | to json }`
 
     const proc = Bun.spawnSync(
       ['nu', '-c', nuScript],
