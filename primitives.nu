@@ -76,8 +76,10 @@ export const PRIMITIVE_META = {
     str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
     url_encode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Percent-encode a string for safe use in a URL", param_options: {}}
     url_decode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a percent-encoded URL string", param_options: {}}
-    to_string:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Format a value as a JSON, NUON, CSV, or text string"
-                   param_options: {format: ["json", "nuon", "csv", "text"]}}
+    to_json:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize any value to a JSON string", param_options: {}}
+    to_csv:        {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize a table to a CSV string", param_options: {}}
+    to_text:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Convert any value to a plain text string (into string)", param_options: {}}
+    to_nuon:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize any value to a NUON string (Nu's native format)", param_options: {}}
     from_string:   {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
                    param_options: {format: ["json", "nuon", "csv"]}}
     row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row.", param_options: {}}
@@ -344,16 +346,10 @@ export def "prim-http-post" [
 # ── Additional compute primitives ─────────────────────────────────────────────
 
 # Format a value as a string (json, nuon, csv, or text)
-export def "prim-to-string" [
-    --format: string = "json"      # Output format: json, nuon, csv, text
-]: any -> string {
-    match $format {
-        "json" => { $in | to json }
-        "csv" => { $in | to csv }
-        "text" => { $in | into string }
-        _ => { $in | to nuon }
-    }
-}
+export def "prim-to-json" []: any -> string { $in | to json }
+export def "prim-to-csv"  []: any -> string { $in | to csv }
+export def "prim-to-text" []: any -> string { $in | into string }
+export def "prim-to-nuon" []: any -> string { $in | to nuon }
 
 # Parse a string as json, nuon, or csv
 export def "prim-from-string" [
