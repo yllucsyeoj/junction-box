@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { writeFileSync, readFileSync, appendFileSync, unlinkSync, readdirSync, existsSync, mkdirSync } from 'node:fs'
 import { loadSpec } from './spec'
-import { runPipeline, type SSEEvent } from './execute'
+import { runPipeline, type SSEEvent, type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
 import { EXAMPLES } from './examples'
 
@@ -15,6 +15,10 @@ const DATA_DIR = process.env.GONUDE_DATA_DIR ? resolve(process.env.GONUDE_DATA_D
 const PATCHES_DIR = resolve(DATA_DIR, 'patches')
 const LOG_FILE = resolve(DATA_DIR, 'runs.jsonl')
 const SERVER_START = Date.now()
+
+function makeRunId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
 
 // Ensure data directories exist (important for fresh Docker volumes)
 mkdirSync(PATCHES_DIR, { recursive: true })
@@ -28,9 +32,11 @@ console.log(`Data directory: ${DATA_DIR}`)
 // ---------------------------------------------------------------------------
 // Utility: append a structured log entry to runs.jsonl
 // ---------------------------------------------------------------------------
-function logRun(entry: Record<string, unknown>): void {
+function logRun(entry: Record<string, unknown>, nodes?: NodeRunRecord[]): void {
   try {
-    appendFileSync(LOG_FILE, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n')
+    const record: Record<string, unknown> = { ts: new Date().toISOString(), ...entry }
+    if (nodes && nodes.length > 0) record.nodes = nodes
+    appendFileSync(LOG_FILE, JSON.stringify(record) + '\n')
   } catch {
     // Non-fatal — don't let logging break execution
   }
@@ -59,6 +65,50 @@ function nuonToGraph(nuonText: string): { ok: true; graph: unknown } | { ok: fal
 }
 
 // ---------------------------------------------------------------------------
+// GET / — agent-oriented API manifest
+// The first thing a model should call to understand this API.
+// ---------------------------------------------------------------------------
+app.get('/', (c) => c.json({
+  name: 'GoNude Pipeline API',
+  description: 'Node-based dataflow engine. POST a graph of nodes+edges to /exec and get back results. Call GET /defs first to learn all available node types.',
+  quick_start: [
+    '1. GET /defs — fetch all node types with schemas and example graphs',
+    '2. POST /exec with {nodes, edges} — run a pipeline synchronously, get back {result}',
+    '3. POST /patch to save a working graph; GET /patches to list saved ones',
+  ],
+  endpoints: {
+    'GET /': 'This manifest — start here',
+    'GET /health': 'Server status, uptime, primitive count',
+    'GET /defs': 'Full node catalogue: all types, ports, params, wirable flags, example graphs — call this before building any graph',
+    'GET /defs/:type': 'Single node definition + example',
+    'GET /nodes': 'Raw node spec (no examples — prefer /defs)',
+    'POST /exec': 'Run a graph synchronously → {status, result, outputs, errors}. Accepts JSON graph or NUON (text/plain) or {alias: "name"}',
+    'POST /run': 'Run a graph, stream SSE events per node (for frontend use)',
+    'GET /patches': 'List saved patches (alias, description, node_types, created_at)',
+    'GET /patch/:alias': 'Retrieve a saved patch',
+    'POST /patch': 'Save a graph as a named patch — body: {alias, description, graph}',
+    'DELETE /patch/:alias': 'Delete a saved patch',
+    'GET /logs': 'Recent execution log entries',
+    'POST /parse-nuon': 'Convert NUON text to JSON graph',
+  },
+  graph_format: {
+    nodes: [{ id: 'string', type: 'node-type-name', params: { param_name: 'value' } }],
+    edges: [{ id: 'string', from: 'node-id', from_port: 'output', to: 'node-id', to_port: 'input' }],
+  },
+  gotchas: [
+    '`get` is single-level only — for nested keys like financials.revenue, chain two get nodes',
+    'Column names are exact-match and case-sensitive — screener/snapshot output uses snake_case (market_cap, not marketCap); run and inspect raw output when unsure',
+    'Some columns contain NUON symbol/atom values (e.g. sec-insider `code` column: S, P, F) — `filter` cannot compare these; use `each` with a Nu expression instead',
+    'Disconnected nodes (no incoming edge) still execute with null input and error silently — they do not halt the graph; always wire every node',
+    'A `return` node with no incoming edge runs immediately with null — always wire terminal nodes last',
+    '`str-interp` takes a record as input and substitutes {field} placeholders — works cleanly with market-snapshot and similar record-output nodes',
+    'POST /exec is the agent endpoint — synchronous, returns JSON with run_id; POST /run streams SSE and is for frontend use',
+    'YouTube nodes (youtube-channel, youtube-search, etc.) scrape youtube.com directly — they require outbound internet access; they will fail with "Network failure" in network-restricted environments',
+    'The llm node requires ANTHROPIC_API_KEY in the server process environment — pass it via docker run -e ANTHROPIC_API_KEY=... or set it in the shell before starting the server',
+  ],
+}))
+
+// ---------------------------------------------------------------------------
 // GET /health — uptime, version, primitive count
 // ---------------------------------------------------------------------------
 app.get('/health', (c) => c.json({
@@ -66,6 +116,7 @@ app.get('/health', (c) => c.json({
   uptime_ms: Date.now() - SERVER_START,
   primitives: nodeSpec.length,
   data_dir: DATA_DIR,
+  api: 'GET / for full endpoint manifest and quick-start guide',
 }))
 
 // ---------------------------------------------------------------------------
@@ -153,6 +204,7 @@ app.get('/defs', (c) => {
 // ---------------------------------------------------------------------------
 app.post('/exec', async (c) => {
   const contentType = c.req.header('content-type') ?? ''
+  const run_id = makeRunId()
   const t0 = Date.now()
 
   let graph: unknown
@@ -165,8 +217,8 @@ app.post('/exec', async (c) => {
       alias = String(body.alias)
       const aliasPath = resolve(PATCHES_DIR, `${alias}.json`)
       if (!existsSync(aliasPath)) {
-        logRun({ type: 'exec', alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
-        return c.json({ status: 'error', fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
+        logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
+        return c.json({ status: 'error', run_id, fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
       }
       graph = JSON.parse(readFileSync(aliasPath, 'utf8')).graph
     } else {
@@ -177,8 +229,8 @@ app.post('/exec', async (c) => {
     const nuonText = await c.req.text()
     const parsed = nuonToGraph(nuonText)
     if (!parsed.ok) {
-      logRun({ type: 'exec', alias, status: 'error', fatal: 'nuon_parse_error', duration_ms: Date.now() - t0 })
-      return c.json({ status: 'error', fatal: `NUON parse error: ${parsed.error}`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 400)
+      logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'nuon_parse_error', duration_ms: Date.now() - t0 })
+      return c.json({ status: 'error', run_id, fatal: `NUON parse error: ${parsed.error}`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 400)
     }
     graph = parsed.graph
   }
@@ -186,9 +238,10 @@ app.post('/exec', async (c) => {
   // Pre-execution validation
   const validationErrors = validateGraph(graph as any, nodeSpec)
   if (validationErrors.length > 0) {
-    logRun({ type: 'exec', alias, status: 'error', fatal: 'validation', node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 })
+    logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'validation', node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 })
     return c.json({
       status: 'error',
+      run_id,
       fatal: null,
       validation_errors: validationErrors,
       errors: {},
@@ -202,9 +255,10 @@ app.post('/exec', async (c) => {
   const errors: Record<string, { message: string; error_type: string }> = {}
   const skipped: string[] = []
   let fatalError: string | null = null
+  let nodeRecords: NodeRunRecord[] = []
 
   try {
-    await runPipeline(graph as any, (event: SSEEvent) => {
+    nodeRecords = await runPipeline(graph as any, (event: SSEEvent) => {
       if ('node_id' in event) {
         if (event.status === 'done') outputs[event.node_id] = event.output
         if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type }
@@ -222,8 +276,8 @@ app.post('/exec', async (c) => {
   const nodeCount = g.nodes?.length ?? 0
 
   if (fatalError || Object.keys(errors).length > 0) {
-    logRun({ type: 'exec', alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 })
-    return c.json({ status: 'error', errors, fatal: fatalError, validation_errors: [], skipped, outputs, result: null }, 500)
+    logRun({ type: 'exec', run_id, alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 }, nodeRecords)
+    return c.json({ status: 'error', run_id, errors, fatal: fatalError, validation_errors: [], skipped, outputs, result: null }, 500)
   }
 
   // Find the "result" value: first return node, or last node in execution order
@@ -232,8 +286,8 @@ app.post('/exec', async (c) => {
     ? (outputs[returnNode.id] ?? null)
     : (Object.values(outputs).at(-1) ?? null)
 
-  logRun({ type: 'exec', alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 })
-  return c.json({ status: 'complete', validation_errors: [], errors: {}, skipped, outputs, result })
+  logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
+  return c.json({ status: 'complete', run_id, validation_errors: [], errors: {}, skipped, outputs, result })
 })
 
 // ---------------------------------------------------------------------------

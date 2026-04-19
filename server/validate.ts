@@ -43,7 +43,7 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input'
   message: string
   suggestion: string
 }
@@ -77,7 +77,21 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
       continue
     }
 
-    // 2. Required params missing (not wired either)
+    // 2. Node expects piped input but has no incoming input edge
+    if (spec.input_type !== 'nothing') {
+      const hasInputEdge = graph.edges.some(e => e.to === node.id && e.to_port === 'input')
+      if (!hasInputEdge) {
+        errors.push({
+          node_id: node.id,
+          type: node.type,
+          error_type: 'disconnected_input',
+          message: `Node "${node.id}" (${node.type}) expects input (type: ${spec.input_type}) but has no incoming edge on its input port.`,
+          suggestion: `Wire an output from an upstream node to this node's input port, or remove this node if it is unused.`,
+        })
+      }
+    }
+
+    // 3. Required params missing (not wired either)
     for (const p of spec.params) {
       if (p.required) {
         const hasStaticValue = node.params[p.name] !== undefined && node.params[p.name] !== ''
@@ -96,7 +110,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
   }
 
   for (const edge of graph.edges) {
-    // 3. Edge references a node that doesn't exist
+    // 4. Edge references a node that doesn't exist
     if (!nodeMap.has(edge.from)) {
       errors.push({
         node_id: edge.to,
@@ -121,7 +135,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
     const toSpec = specMap.get(toNode.type)
 
     if (toSpec && edge.to_port !== 'input') {
-      // 4. Edge wired to a non-wirable param port
+      // 5. Edge wired to a non-wirable param port
       const paramSpec = toSpec.params.find(p => p.name === edge.to_port)
       if (!paramSpec) {
         errors.push({
@@ -142,7 +156,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
       }
     }
 
-    // 5. Type mismatch between connected nodes (best-effort, skipped if type is "any")
+    // 6. Type mismatch between connected nodes (best-effort, skipped if type is "any")
     if (edge.to_port === 'input' && nodeMap.has(edge.from)) {
       const fromSpec = specMap.get(nodeMap.get(edge.from)!.type)
       if (fromSpec && toSpec) {

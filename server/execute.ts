@@ -23,6 +23,15 @@ export type SSEEvent =
   | { node_id: string; status: 'skipped'; reason: string }
   | { status: 'complete' }
 
+export interface NodeRunRecord {
+  node_id: string
+  type: string
+  status: 'done' | 'error' | 'skipped'
+  duration_ms: number
+  error?: string
+  error_type?: string
+}
+
 // Strip internal file/line references from Nu error output and return a clean message.
 function normalizeNuError(raw: string, nodeType: string, params: Record<string, unknown>): { message: string; error_type: string } {
   // Remove Nu source location lines like ",-[primitives.nu:209:5]" and surrounding context
@@ -60,7 +69,7 @@ function normalizeNuError(raw: string, nodeType: string, params: Record<string, 
 export async function runPipeline(
   graph: Graph,
   emit: (event: SSEEvent) => void
-): Promise<void> {
+): Promise<NodeRunRecord[]> {
   // Validate and determine execution order
   const order = toposort(
     graph.nodes.map(n => n.id),
@@ -69,9 +78,11 @@ export async function runPipeline(
 
   const outputs = new Map<string, string>()   // node_id -> NUON string
   const failed = new Set<string>()            // nodes that errored or were skipped
+  const nodeRecords: NodeRunRecord[] = []
 
   for (const nodeId of order) {
     const node = graph.nodes.find(n => n.id === nodeId)!
+    const nodeStart = Date.now()
 
     // If any upstream dependency failed, skip this node rather than running it with null input
     const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
@@ -79,6 +90,7 @@ export async function runPipeline(
       emit({ node_id: nodeId, status: 'skipped', reason: `Upstream node "${inputEdge.from}" failed or was skipped.` })
       failed.add(nodeId)
       outputs.set(nodeId, 'null')
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'skipped', duration_ms: Date.now() - nodeStart })
       continue
     }
 
@@ -143,6 +155,7 @@ export async function runPipeline(
       emit({ node_id: nodeId, status: 'error', error: message, error_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
     } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
       // Runtime error caught by try/catch wrapper
       const raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
@@ -150,11 +163,14 @@ export async function runPipeline(
       emit({ node_id: nodeId, status: 'error', error: message, error_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
     } else {
       outputs.set(nodeId, stdout)
       emit({ node_id: nodeId, status: 'done', output: stdout })
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'done', duration_ms: Date.now() - nodeStart })
     }
   }
 
   emit({ status: 'complete' })
+  return nodeRecords
 }
