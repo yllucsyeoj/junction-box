@@ -289,14 +289,14 @@ app.post('/exec', async (c) => {
     : (Object.values(outputs).at(-1) ?? null)
   const result = (() => {
     if (rawResult === null) return null
-    // Unwrap NUON string wrapper (all string node outputs are NUON-quoted)
+    // Unwrap NUON string wrapper: NUON quotes strings as "..." with \" escaping
+    // but allows literal newlines, so JSON.parse fails on multiline values.
+    // Strip outer quotes and unescape manually instead.
     if (rawResult.startsWith('"') && rawResult.endsWith('"')) {
-      try {
-        const str = JSON.parse(rawResult) as string  // bare string value
-        // If the string is itself valid JSON (e.g. from to-json), embed as real value
-        try { return JSON.parse(str) } catch {}
-        return str  // plain string (CSV, text, etc.)
-      } catch {}
+      const str = rawResult.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+      // If the unwrapped content is valid JSON (e.g. from to-json), embed as real value
+      try { return JSON.parse(str) } catch {}
+      return str  // plain string (CSV, text, etc.)
     }
     return rawResult  // non-string NUON (number, table, etc.) — return as-is
   })()
