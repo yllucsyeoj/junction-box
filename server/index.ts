@@ -289,10 +289,16 @@ app.post('/exec', async (c) => {
     : (Object.values(outputs).at(-1) ?? null)
   const result = (() => {
     if (rawResult === null) return null
+    // Unwrap NUON string wrapper (all string node outputs are NUON-quoted)
     if (rawResult.startsWith('"') && rawResult.endsWith('"')) {
-      try { return JSON.parse(rawResult) } catch {}
+      try {
+        const str = JSON.parse(rawResult) as string  // bare string value
+        // If the string is itself valid JSON (e.g. from to-json), embed as real value
+        try { return JSON.parse(str) } catch {}
+        return str  // plain string (CSV, text, etc.)
+      } catch {}
     }
-    return rawResult
+    return rawResult  // non-string NUON (number, table, etc.) — return as-is
   })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
