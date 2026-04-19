@@ -117,9 +117,8 @@ export async function runPipeline(
       const paramValue = node.params[paramName] ?? ''
       const paramEdge = graph.edges.find(e => e.to === nodeId && e.to_port === paramName)
       if (paramEdge) {
-        // Pass edge value via environment variable as raw NUON string.
-        // Primitives with wirable params are typed --param: string and parse internally
-        // (e.g. $items | from nuon, $operand | into float) — don't pre-parse here.
+        // Pass edge value via env var (JSON string). Primitives use from nuon internally —
+        // JSON is valid NUON syntax for all wire types (arrays, objects, primitives).
         const envKey = `GONUDE_PARAM_${paramName.toUpperCase()}`
         paramEnv[envKey] = outputs.get(paramEdge.from) ?? 'null'
         resolvedFlags.push(`--${paramName} $env.${envKey}`)
@@ -133,15 +132,13 @@ export async function runPipeline(
     // Build Nu invocation
     const flagStr = resolvedFlags.join(' ')
     const cmdName = `prim-${node.type}`
-    const inputExpr = pipelineInput !== null
-      ? `("${pipelineInput.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" | from nuon) | `
-      : ''
-    // Return nodes: emit raw output (string pass-through, else to json) so the
-    // API result field needs no unwrapping. All other nodes use NUON for the
-    // inter-node wire format.
-    const serialize = node.type === 'return'
-      ? '| if ($in | describe) == "string" { $in } else { $in | to json }'
-      : '| to nuon'
+    // Pass pipeline input via env var — to json produces multi-line output which
+    // would break Nu string-literal embedding; env vars handle arbitrary content safely.
+    const PIPE_IN = 'GONUDE_PIPE_IN'
+    if (pipelineInput !== null) paramEnv[PIPE_IN] = pipelineInput
+    const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
+    // All nodes serialize to JSON — clean for API consumers and jq-able directly.
+    const serialize = '| to json'
     const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.msg)" | to json }`
 
     const proc = Bun.spawnSync(

@@ -278,7 +278,7 @@ app.post('/exec', async (c) => {
     }, 422)
   }
 
-  const outputs: Record<string, string> = {}
+  const outputs: Record<string, string> = {}  // raw JSON strings, decoded at response time
   const errors: Record<string, { message: string; error_type: string }> = {}
   const skipped: string[] = []
   let fatalError: string | null = null
@@ -303,13 +303,22 @@ app.post('/exec', async (c) => {
   const nodeCount = g.nodes?.length ?? 0
 
   if (fatalError || Object.keys(errors).length > 0) {
+    const partialOutputs: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(outputs)) {
+      try { partialOutputs[k] = JSON.parse(v) } catch { partialOutputs[k] = v }
+    }
     logRun({ type: 'exec', run_id, alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 }, nodeRecords)
-    return c.json({ status: 'error', run_id, errors, fatal: fatalError, validation_errors: [], skipped, outputs, result: null }, 500)
+    return c.json({ status: 'error', run_id, errors, fatal: fatalError, validation_errors: [], skipped, outputs: partialOutputs, result: null }, 500)
+  }
+
+  // Decode each node's JSON output string into a real value for the API response.
+  // The internal outputs map stays as strings (needed for inter-node passing in execute.ts).
+  const decodedOutputs: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(outputs)) {
+    try { decodedOutputs[k] = JSON.parse(v) } catch { decodedOutputs[k] = v }
   }
 
   // Find the "result" value: first return node, or last node in execution order.
-  // Return nodes emit raw text (string pass-through or JSON) so we just try
-  // JSON.parse — if it succeeds the caller gets a real value, otherwise a string.
   const returnNode = g.nodes.find(n => n.type === 'return')
   const rawResult = returnNode
     ? (outputs[returnNode.id] ?? null)
@@ -319,7 +328,7 @@ app.post('/exec', async (c) => {
   })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
-  return c.json({ status: 'complete', run_id, validation_errors: [], errors: {}, skipped, outputs, result })
+  return c.json({ status: 'complete', run_id, validation_errors: [], errors: {}, skipped, outputs: decodedOutputs, result })
 })
 
 // ---------------------------------------------------------------------------

@@ -184,14 +184,15 @@ export def "prim-display" []: any -> any {
 # Write value to a file
 export def "prim-file-out" [
     --path: string = ""          # File path to write to
-    --format: string = "nuon"    # Output format: nuon, json, csv, text
-]: any -> nothing {
+    --format: string = "json"    # Output format: json, csv, text, nuon
+]: any -> record {
     match $format {
         "json" => { $in | to json | save --force $path }
         "csv" => { $in | to csv | save --force $path }
         "text" => { $in | into string | save --force $path }
         _ => { $in | to nuon | save --force $path }
     }
+    {saved: $path, format: $format}
 }
 
 # Return the pipeline result (pass-through terminal node)
