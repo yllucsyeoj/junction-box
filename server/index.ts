@@ -104,7 +104,7 @@ app.get('/', (c) => c.json({
     '`str-interp` takes a record as input and substitutes {field} placeholders — works cleanly with market-snapshot and similar record-output nodes',
     'POST /exec is the agent endpoint — synchronous, returns JSON with run_id; POST /run streams SSE and is for frontend use',
     'YouTube nodes (youtube-channel, youtube-search, etc.) scrape youtube.com directly — they require outbound internet access; they will fail with "Network failure" in network-restricted environments',
-    'The llm node defaults to Anthropic (needs ANTHROPIC_API_KEY env var). For local models set --endpoint to an OpenAI-compatible URL (e.g. http://localhost:1234/v1/chat/completions for LM Studio) and --api_key_env to "none" if no key is required',
+    'The llm node reads LLM_ENDPOINT and LLM_API_KEY from the server environment — set these at container/process start, not on the node. LLM_ENDPOINT empty = Anthropic cloud (uses LLM_API_KEY or ANTHROPIC_API_KEY). LLM_ENDPOINT set = OpenAI-compatible (LM Studio, OpenAI, etc.); LLM_API_KEY optional.',
   ],
 }))
 

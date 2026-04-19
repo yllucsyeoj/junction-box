@@ -59,8 +59,8 @@ export const PRIMITIVE_META = {
     file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
                    param_options: {format: ["nuon", "json", "csv", "text"]}}
     return:        {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
-    llm:           {category: "external",  color: "#a855f7", wirable: ["context", "endpoint"],
-                   agent_hint: "Call an LLM. Default: Anthropic cloud (needs ANTHROPIC_API_KEY env var). Set --endpoint to any OpenAI-compatible URL for local models — e.g. http://localhost:1234/v1/chat/completions for LM Studio (no key needed, set api_key_env to 'none')."
+    llm:           {category: "external",  color: "#a855f7", wirable: ["context"],
+                   agent_hint: "Call an LLM. Endpoint and credentials are set via server env vars — LLM_ENDPOINT (empty = Anthropic cloud, set to OpenAI-compatible URL for local/other), LLM_API_KEY (Bearer token; falls back to ANTHROPIC_API_KEY for Anthropic; omit for LM Studio). Node params: model, context, max_tokens only."
                    param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
     http_post:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
     math:          {category: "compute",   color: "#eab308", wirable: ["operand"],      agent_hint: "Apply a math operation (+, -, *, /) to a number. Wire a number to --operand for multi-input."
@@ -199,22 +199,22 @@ export def "prim-return" []: any -> any {
 
 # ── External primitives ───────────────────────────────────────────────────────
 
-# Call an LLM — supports Anthropic (default) or any OpenAI-compatible endpoint (LM Studio, OpenAI, etc.)
+# Call an LLM. Endpoint and credentials are read from server env vars:
+#   LLM_ENDPOINT — if unset/empty, uses Anthropic cloud; otherwise OpenAI-compatible (LM Studio, etc.)
+#   LLM_API_KEY  — Bearer token for OpenAI-compatible endpoints; falls back to ANTHROPIC_API_KEY for Anthropic
 export def "prim-llm" [
-    --model:       string = "claude-haiku-4-5-20251001"  # Model ID
-    --endpoint:    string = ""    # API URL. Empty = Anthropic cloud. E.g. http://localhost:1234/v1/chat/completions for LM Studio
-    --api_key_env: string = ""    # Env var holding API key. Empty = auto (ANTHROPIC_API_KEY or LLM_API_KEY). Set to "none" for no auth
-    --context:     string = ""    # Optional system context prepended to the prompt (wirable)
-    --max_tokens:  string = "1024"  # Max tokens to generate
+    --model:      string = "claude-haiku-4-5-20251001"  # Model ID
+    --context:    string = ""    # Optional system context prepended to the prompt (wirable)
+    --max_tokens: string = "1024"  # Max tokens to generate
 ]: string -> string {
-    let use_anthropic = ($endpoint | is-empty)
-    let url = if $use_anthropic { "https://api.anthropic.com/v1/messages" } else { $endpoint }
-
-    # Resolve API key from named env var
-    let key_env = if ($api_key_env | is-empty) {
-        if $use_anthropic { "ANTHROPIC_API_KEY" } else { "LLM_API_KEY" }
-    } else { $api_key_env }
-    let api_key = if $key_env == "none" { "" } else { try { $env | get $key_env } catch { "" } }
+    let llm_endpoint = (try { $env.LLM_ENDPOINT } catch { "" })
+    let use_anthropic = ($llm_endpoint | is-empty)
+    let url = if $use_anthropic { "https://api.anthropic.com/v1/messages" } else { $llm_endpoint }
+    let api_key = if $use_anthropic {
+        try { $env.LLM_API_KEY } catch { try { $env.ANTHROPIC_API_KEY } catch { "" } }
+    } else {
+        try { $env.LLM_API_KEY } catch { "" }
+    }
 
     let input = $in
     let prompt = if ($context | is-empty) { $input } else { $"($context)\n\n($input)" }
