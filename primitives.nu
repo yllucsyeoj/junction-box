@@ -240,7 +240,15 @@ export def "prim-llm" [
             {Authorization: $"Bearer ($api_key)", content-type: "application/json"}
         }
         let resp = (http post $url --headers $headers ($body | to json))
-        $resp | get choices.0.message.content
+        let msg = ($resp | get choices.0.message)
+        let content = (try { $msg | get content | default "" } catch { "" })
+        if ($content | is-empty) {
+            # Reasoning models (Gemma, DeepSeek-R1, QwQ, etc.) emit their answer in
+            # reasoning_content when content is empty — fall back to it.
+            try { $msg | get reasoning_content | default "" } catch { "" }
+        } else {
+            $content
+        }
     }
 }
 
