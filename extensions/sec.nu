@@ -175,7 +175,7 @@ def sec_parse_transactions [doc: record, filing_date: string, ticker: string]: n
     let ndt = ($nodes | sec_xchild "nonDerivativeTable")
     if ($ndt.content | is-empty) { return [] }
 
-    $ndt.content | each {|txn|
+    $ndt.content | where {|n| ($n | describe) =~ "record"} | each {|txn|
         let tc  = ($txn.content | sec_xchild "transactionCoding")
         let ta  = ($txn.content | sec_xchild "transactionAmounts")
         let pt  = ($txn.content | sec_xchild "postTransactionAmounts")
@@ -385,7 +385,7 @@ export def "prim-sec-insider" [
 
         let xml_url = $"https://www.sec.gov/Archives/edgar/data/($padded)/($clean)/($xml_file)"
         let doc     = (try { http get -H {User-Agent: $EDGAR_UA} $xml_url } catch { return [] })
-        sec_parse_transactions $doc $f.date $sym
+        try { sec_parse_transactions $doc $f.date $sym } catch { [] }
     } | flatten
 }
 

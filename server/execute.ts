@@ -52,6 +52,8 @@ function normalizeNuError(raw: string, nodeType: string, params: Record<string, 
     error_type = 'syntax'
   } else if (raw.includes('NotFound') || raw.includes('not found')) {
     error_type = 'not_found'
+  } else if (raw.includes('Network failure') || raw.includes('os error 111') || raw.includes('Connection refused') || raw.includes('unable to connect')) {
+    error_type = 'network_error'
   }
 
   // Try to add a hint about which param might be wrong based on the message

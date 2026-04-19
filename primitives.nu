@@ -218,6 +218,10 @@ export def "prim-llm" [
         try { $env.LLM_API_KEY } catch { "" }
     }
 
+    if $use_anthropic and ($api_key | is-empty) {
+        error make {msg: "llm: no API key — set LLM_API_KEY or ANTHROPIC_API_KEY in server env. For a local model, set LLM_ENDPOINT to an OpenAI-compatible URL (e.g. http://host.docker.internal:1234/v1/chat/completions for LM Studio)."}
+    }
+
     let input = $in
     let prompt = if ($context | is-empty) { $input } else { $"($context)\n\n($input)" }
     let max_tok = ($max_tokens | into int)

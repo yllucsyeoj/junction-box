@@ -16,9 +16,17 @@ const COMPAT: Record<string, string[]> = {
   nothing:  ['any', 'nothing'],
 }
 
+// Strip Nu parameterized type suffixes for COMPAT lookup: list<any> → list, record<a: int> → record
+function normalizeType(t: string): string {
+  const lt = t.indexOf('<')
+  return lt === -1 ? t : t.slice(0, lt)
+}
+
 function typesCompatible(inputType: string, outputType: string): boolean {
-  if (inputType === 'any' || outputType === 'any') return true
-  return (COMPAT[inputType] ?? ['any']).includes(outputType)
+  const normIn = normalizeType(inputType)
+  const normOut = normalizeType(outputType)
+  if (normIn === 'any' || normOut === 'any') return true
+  return (COMPAT[normIn] ?? ['any']).includes(normOut)
 }
 
 // Levenshtein distance for "did you mean?" suggestions
