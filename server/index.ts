@@ -280,11 +280,20 @@ app.post('/exec', async (c) => {
     return c.json({ status: 'error', run_id, errors, fatal: fatalError, validation_errors: [], skipped, outputs, result: null }, 500)
   }
 
-  // Find the "result" value: first return node, or last node in execution order
+  // Find the "result" value: first return node, or last node in execution order.
+  // Unwrap NUON string values so to-json/to-csv/to-text output arrives as a raw
+  // string rather than a NUON-quoted string — callers get the format they asked for.
   const returnNode = g.nodes.find(n => n.type === 'return')
-  const result = returnNode
+  const rawResult = returnNode
     ? (outputs[returnNode.id] ?? null)
     : (Object.values(outputs).at(-1) ?? null)
+  const result = (() => {
+    if (rawResult === null) return null
+    if (rawResult.startsWith('"') && rawResult.endsWith('"')) {
+      try { return JSON.parse(rawResult) } catch {}
+    }
+    return rawResult
+  })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
   return c.json({ status: 'complete', run_id, validation_errors: [], errors: {}, skipped, outputs, result })
