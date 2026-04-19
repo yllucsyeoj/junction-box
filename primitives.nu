@@ -56,12 +56,12 @@ export const PRIMITIVE_META = {
     window:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rolling N-row window aggregate over a table column. Adds a rolling result column."
                    param_options: {op: ["avg", "sum", "min", "max"]}}
     display:       {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Display the value (writes to stderr) and pass it through — safe to use mid-pipeline.", param_options: {}}
-    file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: nuon, json, csv, or text"
-                   param_options: {format: ["nuon", "json", "csv", "text"]}}
+    file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: json, csv, text, or nuon"
+                   param_options: {format: ["json", "csv", "text", "nuon"]}}
     return:        {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Return the pipeline result as the final output (pass-through terminal node)", param_options: {}}
     llm:           {category: "external",  color: "#a855f7", wirable: ["context"],
-                   agent_hint: "Call an LLM. Endpoint and credentials are set via server env vars — LLM_ENDPOINT (empty = Anthropic cloud, set to OpenAI-compatible URL for local/other), LLM_API_KEY (Bearer token; falls back to ANTHROPIC_API_KEY for Anthropic; omit for LM Studio). Node params: model, context, max_tokens only."
-                   param_options: {model: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"]}}
+                   agent_hint: "Call an LLM. Config via server env: LLM_ENDPOINT (empty=Anthropic cloud, set for OpenAI-compatible/local), LLM_API_KEY, LLM_MODEL (default model ID — node param overrides when set). The context param is sent as a system prompt (not prepended to user message, so it is not echoed back)."
+                   param_options: {}}
     http_post:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
     math:          {category: "compute",   color: "#eab308", wirable: ["operand"],      agent_hint: "Apply a math operation (+, -, *, /) to a number. Wire a number to --operand for multi-input."
                    param_options: {op: ["+", "-", "*", "/"]}}
@@ -202,12 +202,13 @@ export def "prim-return" []: any -> any {
 
 # ── External primitives ───────────────────────────────────────────────────────
 
-# Call an LLM. Endpoint and credentials are read from server env vars:
+# Call an LLM. Config via server env vars:
 #   LLM_ENDPOINT — if unset/empty, uses Anthropic cloud; otherwise OpenAI-compatible (LM Studio, etc.)
-#   LLM_API_KEY  — Bearer token for OpenAI-compatible endpoints; falls back to ANTHROPIC_API_KEY for Anthropic
+#   LLM_API_KEY  — Bearer token; falls back to ANTHROPIC_API_KEY for Anthropic; omit for LM Studio
+#   LLM_MODEL    — default model ID; node --model param overrides when set
 export def "prim-llm" [
-    --model:      string = "claude-haiku-4-5-20251001"  # Model ID
-    --context:    string = ""    # Optional system context prepended to the prompt (wirable)
+    --model:      string = ""    # Model ID — overrides LLM_MODEL env var when set
+    --context:    string = ""    # System prompt sent as system role (not prepended to user message)
     --max_tokens: string = "1024"  # Max tokens to generate
 ]: string -> string {
     let llm_endpoint = (try { $env.LLM_ENDPOINT } catch { "" })
@@ -218,23 +219,36 @@ export def "prim-llm" [
     } else {
         try { $env.LLM_API_KEY } catch { "" }
     }
+    let resolved_model = if ($model | is-empty) {
+        try { $env.LLM_MODEL } catch { if $use_anthropic { "claude-haiku-4-5-20251001" } else { "" } }
+    } else { $model }
 
     if $use_anthropic and ($api_key | is-empty) {
         error make {msg: "llm: no API key — set LLM_API_KEY or ANTHROPIC_API_KEY in server env. For a local model, set LLM_ENDPOINT to an OpenAI-compatible URL (e.g. http://host.docker.internal:1234/v1/chat/completions for LM Studio)."}
     }
 
     let input = $in
-    let prompt = if ($context | is-empty) { $input } else { $"($context)\n\n($input)" }
     let max_tok = ($max_tokens | into int)
 
     if $use_anthropic {
-        let body = {model: $model, max_tokens: $max_tok, messages: [{role: "user", content: $prompt}]}
+        # Anthropic uses a top-level `system` field, not a system role in messages
+        let body = if ($context | is-empty) {
+            {model: $resolved_model, max_tokens: $max_tok, messages: [{role: "user", content: $input}]}
+        } else {
+            {model: $resolved_model, max_tokens: $max_tok, system: $context, messages: [{role: "user", content: $input}]}
+        }
         let resp = (http post $url
             --headers {x-api-key: $api_key, anthropic-version: "2023-06-01", content-type: "application/json"}
             ($body | to json))
         $resp | get content.0.text
     } else {
-        let body = {model: $model, max_tokens: $max_tok, messages: [{role: "user", content: $prompt}]}
+        # OpenAI-compatible: context becomes a system role message
+        let messages = if ($context | is-empty) {
+            [{role: "user", content: $input}]
+        } else {
+            [{role: "system", content: $context}, {role: "user", content: $input}]
+        }
+        let body = {model: $resolved_model, max_tokens: $max_tok, messages: $messages}
         let headers = if ($api_key | is-empty) {
             {content-type: "application/json"}
         } else {
@@ -244,8 +258,7 @@ export def "prim-llm" [
         let msg = ($resp | get choices.0.message)
         let content = (try { $msg | get content | default "" } catch { "" })
         if ($content | is-empty) {
-            # Reasoning models (Gemma, DeepSeek-R1, QwQ, etc.) emit their answer in
-            # reasoning_content when content is empty — fall back to it.
+            # Reasoning models (Gemma, DeepSeek-R1, QwQ, etc.) put answer in reasoning_content
             try { $msg | get reasoning_content | default "" } catch { "" }
         } else {
             $content

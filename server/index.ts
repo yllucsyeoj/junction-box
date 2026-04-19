@@ -97,7 +97,7 @@ app.get('/', (c) => c.json({
   gotchas: [
     '`get` is single-level only — for nested keys like financials.revenue, chain two get nodes',
     'Column names are exact-match and case-sensitive — screener/snapshot output uses snake_case (market_cap, not marketCap); run and inspect raw output when unsure',
-    'Some columns contain NUON symbol/atom values (e.g. sec-insider `code` column: S, P, F) — `filter` cannot compare these; use `each` with a Nu expression instead',
+    '`get` does not index by position — `get "0"` on a table/list looks for a column named "0", not the first row; use `first` to get the top row, then `get field` to extract a value',
     'Disconnected nodes (no incoming edge) still execute with null input and error silently — they do not halt the graph; always wire every node',
     'A `return` node with no incoming edge runs immediately with null — always wire terminal nodes last',
     '`str-interp` takes a record as input and substitutes {field} placeholders — works cleanly with market-snapshot and similar record-output nodes',
