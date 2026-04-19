@@ -105,11 +105,11 @@ export def "prim-fetch" [
     }
 }
 
-# Provide a fixed constant value (NUON expression)
+# Provide a fixed constant value. Accepts NUON expressions (42, [1 2 3], {a: 1}) or plain strings.
 export def "prim-const" [
-    --value: string = "null"     # NUON expression (e.g. 42, "hello", [1 2 3])
+    --value: string = "null"     # Value to emit: NUON expression or plain string
 ]: nothing -> any {
-    $value | from nuon
+    try { $value | from nuon } catch { $value }
 }
 
 # Read an environment variable
