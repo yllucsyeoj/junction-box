@@ -35,7 +35,7 @@ export const SEC_PRIMITIVE_META = {
         category: "sec"
         color: "#6366f1"
         wirable: []
-        agent_hint: "Fetch insider transactions (Form 4) for a ticker: owner name, role, transaction code, shares, price, value, shares after."
+        agent_hint: "Fetch insider transactions (Form 4) for a ticker: owner_name, role, transaction_date, code (string: S=sale, P=purchase, F=tax), shares, price_per_share, value, shares_after. Filter on code with: filter(column:code, op:==, value:S)."
         param_options: {}
     }
     sec_filing: {
@@ -199,7 +199,7 @@ def sec_parse_transactions [doc: record, filing_date: string, ticker: string]: n
             owner_name:       $owner_name
             role:             $role
             transaction_date: $txn_date
-            code:             $code
+            code:             ($code | into string | default "")
             shares:           $shares
             price_per_share:  $price
             value:            $value

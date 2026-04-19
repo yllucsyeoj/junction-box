@@ -83,7 +83,6 @@ app.get('/', (c) => c.json({
     'GET /defs/:type': 'Single node definition + example',
     'GET /nodes': 'Raw node spec (no examples — prefer /defs)',
     'POST /exec': 'Run a graph synchronously → {status, result, outputs, errors}. Accepts JSON graph or NUON (text/plain) or {alias: "name"}',
-    'POST /run': 'Run a graph, stream SSE events per node (for frontend use)',
     'GET /patches': 'List saved patches (alias, description, node_types, created_at)',
     'GET /patch/:alias': 'Retrieve a saved patch',
     'POST /patch': 'Save a graph as a named patch — body: {alias, description, graph}',
@@ -102,7 +101,7 @@ app.get('/', (c) => c.json({
     'Disconnected nodes (no incoming edge) still execute with null input and error silently — they do not halt the graph; always wire every node',
     'A `return` node with no incoming edge runs immediately with null — always wire terminal nodes last',
     '`str-interp` takes a record as input and substitutes {field} placeholders — works cleanly with market-snapshot and similar record-output nodes',
-    'POST /exec is the agent endpoint — synchronous, returns JSON with run_id; POST /run streams SSE and is for frontend use',
+    'POST /exec is the agent endpoint — synchronous JSON response with run_id, outputs, and result',
     'YouTube nodes (youtube-channel, youtube-search, etc.) scrape youtube.com directly — they require outbound internet access; they will fail with "Network failure" in network-restricted environments',
     'The llm node reads LLM_ENDPOINT and LLM_API_KEY from the server environment — set these at container/process start, not on the node. LLM_ENDPOINT empty = Anthropic cloud (uses LLM_API_KEY or ANTHROPIC_API_KEY). LLM_ENDPOINT set = OpenAI-compatible (LM Studio, OpenAI, etc.); LLM_API_KEY optional.',
   ],
@@ -125,14 +124,42 @@ app.get('/health', (c) => c.json({
 app.get('/nodes', (c) => c.json(nodeSpec))
 
 // ---------------------------------------------------------------------------
-// POST /run — SSE stream for the frontend canvas
-// Accepts: application/json (Graph)
+// POST /run — SSE stream for the frontend canvas ONLY
+// Accepts: text/event-stream clients (WebUI)
 // Returns: text/event-stream
+//
+// Agents: use POST /exec instead — it returns synchronous JSON.
 // ---------------------------------------------------------------------------
 app.post('/run', async (c) => {
+  // Reject non-SSE clients (agents, curl, etc.) with a helpful pointer to /exec
+  const accept = c.req.header('accept') ?? ''
+  if (!accept.includes('text/event-stream')) {
+    return c.json({
+      error: 'POST /run streams Server-Sent Events and is intended for the WebUI frontend. Use POST /exec for synchronous JSON responses.',
+      exec_endpoint: 'POST /exec',
+      body_format: { nodes: [{ id: 'string', type: 'node-type', params: {} }], edges: [{ id: 'string', from: 'node-id', from_port: 'output', to: 'node-id', to_port: 'input' }] },
+      alias_shorthand: { alias: 'my-patch-name' },
+      docs: 'GET / for full API guide',
+    }, 400)
+  }
+
   const graph = await c.req.json()
 
+  // Validate before executing so the frontend gets a structured error, not a JS crash
+  const runValidationErrors = validateGraph(graph as any, nodeSpec)
   const encoder = new TextEncoder()
+  if (runValidationErrors.length > 0) {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'fatal', error: 'Graph validation failed', validation_errors: runValidationErrors })}\n\n`))
+        controller.close()
+      }
+    })
+    return new Response(body, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+    })
+  }
+
   const body = new ReadableStream({
     async start(controller) {
       const emit = (event: SSEEvent) => {
@@ -404,5 +431,17 @@ app.post('/parse-nuon', async (c) => {
   }
   return c.json(parsed.graph)
 })
+
+// ---------------------------------------------------------------------------
+// Catch-all 404 — converts any unknown path into a useful pointer to GET /
+// Covers all the paths a model might probe: /openapi.json, /docs, /swagger,
+// /pipelines, /graphs, /execute, /patches/:alias, /run/:alias, etc.
+// ---------------------------------------------------------------------------
+app.notFound((c) => c.json({
+  error: 'Not found',
+  hint: 'Call GET / for the full API guide — it lists all endpoints, the graph format, gotchas, and a quick-start guide.',
+  manifest: 'GET /',
+  docs: 'GET /defs',
+}, 404))
 
 export default { port: 3001, hostname: '0.0.0.0', fetch: app.fetch }

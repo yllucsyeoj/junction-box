@@ -72,7 +72,7 @@ export const PRIMITIVE_META = {
     math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg on a list or table column"
                    param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg"]}}
     each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list. Use $in for the current element. e.g. $in * 2", param_options: {}}
-    str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable.", param_options: {}}
+    str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable. Param values are plain strings — do NOT use NUON quoting (set prefix to label= not \\\"label=\\\").", param_options: {}}
     str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
     url_encode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Percent-encode a string for safe use in a URL", param_options: {}}
     url_decode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a percent-encoded URL string", param_options: {}}
@@ -82,7 +82,7 @@ export const PRIMITIVE_META = {
     to_nuon:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize any value to a NUON string (Nu's native format)", param_options: {}}
     from_string:   {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
                    param_options: {format: ["json", "nuon", "csv"]}}
-    row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row.", param_options: {}}
+    row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row. IMPORTANT: when using --as_col, the expression must return a scalar (string/number/bool) — returning the whole row record creates a nested column that breaks downstream filter comparisons.", param_options: {}}
     date_format:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Format a datetime as a string using a strftime pattern (default: %Y-%m-%d %H:%M:%S)", param_options: {}}
     into_datetime: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Parse a string into a datetime value — optionally provide a --fmt strftime pattern", param_options: {}}
     date_add:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Add a duration to a datetime. amount examples: 1day, 2hr, 30min, -7day", param_options: {}}
