@@ -5,7 +5,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     ca-certificates \
+    git \
+    build-essential \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:$PATH"
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash
@@ -23,6 +31,14 @@ RUN case "${TARGETARCH}" in \
         "nu-${NU_VERSION}-${NU_ARCH}/nu" \
         "nu-${NU_VERSION}-${NU_ARCH}/nu_plugin_query" && \
     nu -c "plugin add /usr/local/bin/nu_plugin_query"
+
+# Build nu_plugin_htmd from source
+RUN git clone --depth 1 https://github.com/yllucsyeoj/nu_plugin_htmd.git /tmp/nu_plugin_htmd && \
+    cd /tmp/nu_plugin_htmd && \
+    cargo build --release && \
+    mv target/release/nu_plugin_htmd /usr/local/bin/ && \
+    rm -rf /tmp/nu_plugin_htmd
+RUN nu -c "plugin add /usr/local/bin/nu_plugin_htmd"
 
 WORKDIR /app
 

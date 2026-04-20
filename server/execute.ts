@@ -58,7 +58,8 @@ function normalizeNuError(raw: string, nodeType: string, params: Record<string, 
 
   // Try to add a hint about which param might be wrong based on the message
   const paramHints: string[] = []
-  for (const [k, v] of Object.entries(params)) {
+  const paramsObj = params ?? {}
+  for (const [k, v] of Object.entries(paramsObj)) {
     if (stripped.toLowerCase().includes(String(v).toLowerCase().slice(0, 6))) {
       paramHints.push(k)
     }
@@ -111,10 +112,10 @@ export async function runPipeline(
         .filter(e => e.to === nodeId && e.to_port !== 'input')
         .map(e => e.to_port)
     )
-    const allParamNames = new Set([...Object.keys(node.params), ...wiredPorts])
+    const allParamNames = new Set([...(node.params ? Object.keys(node.params) : []), ...wiredPorts])
 
     for (const paramName of allParamNames) {
-      const paramValue = node.params[paramName] ?? ''
+      const paramValue = (node.params ?? {})[paramName] ?? ''
       const paramEdge = graph.edges.find(e => e.to === nodeId && e.to_port === paramName)
       if (paramEdge) {
         // Pass edge value via env var (JSON string). Primitives use from nuon internally —
