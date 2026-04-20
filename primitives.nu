@@ -273,7 +273,7 @@ export def "prim-llm" [
 export def "prim-analyze" [
     --prompt:     string = "Summarize the key themes. For each theme cite the source items by number (e.g. [3], [7])."
     --fields:     string = ""      # Comma-separated columns to include (default: all except noise)
-    --context:    string = ""      # System prompt
+    --context:    string = "You are a concise analyst. Output only your final answer — no thinking, no self-correction, no preamble."  # System prompt
     --model:      string = ""      # Model ID — overrides LLM_MODEL env var when set
     --max_tokens: string = "2048"  # Max tokens to generate
 ]: table -> string {
