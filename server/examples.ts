@@ -282,7 +282,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     nodes: [
       constSrc('"What is 2 + 2? Answer in one word."'),
       { id: 'ctx', type: 'const', position: { x: 0, y: 80 }, params: { value: '"You are a terse assistant."' } },
-      { id: 'op', type: 'llm', position: { x: 200, y: 0 }, params: { model: 'claude-haiku-4-5-20251001', context: '' } },
+      { id: 'op', type: 'llm', position: { x: 200, y: 0 }, params: { model: '', context: '' } },
       ret(),
     ],
     edges: [
