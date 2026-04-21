@@ -48,11 +48,11 @@ describe('Integration - Multi-Node Chains', () => {
     expect(res.result.length).toBe(32); // md5 hex length
   });
 
-  test('filter table: keep age > 25', async () => {
+  test('filter table: keep score > 80', async () => {
     const res = await exec({
       nodes: [
-        { id: 'src', type: 'const', params: { value: '[[name, age]; [Bob, 85] [Alice, 92] [Charlie, 78]]' } },
-        { id: 'f', type: 'filter', params: { column: 'age', op: '>', value: '80' } },
+        { id: 'src', type: 'const', params: { value: '[[name score]; [Bob 85] [Alice 92] [Charlie 78]]' } },
+        { id: 'f', type: 'filter', params: { column: 'score', op: '>', value: '80' } },
         { id: 'out', type: 'return', params: {} },
       ],
       edges: [

@@ -260,7 +260,7 @@ describe('Core Nodes - Verified Working', () => {
   test('filter with table', async () => {
     const res = await exec({
       nodes: [
-        { id: 'src', type: 'const', params: { value: '[[name, age]; [Alice, 30] [Bob, 25] [Charlie, 35]]' } },
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Alice 30] [Bob 25] [Charlie 35]]' } },
         { id: 'op', type: 'filter', params: { column: 'age', op: '>', value: '25' } },
         { id: 'out', type: 'return', params: {} },
       ],
@@ -345,16 +345,133 @@ describe('Integration - Multi-Node Chains', () => {
     expect(res.result.length).toBe(32); // md5 hex length
   });
 
-  test.skip('table: filter then sort - FAILS: sort needs table input', async () => {
-    // sort node fails when chained after filter - needs investigation
+  test.skip('table: filter then sort - needs sort node', async () => {
+    // sort node may not be implemented yet
   });
 });
 
-describe('Known Issues - Nodes that need fixes', () => {
-  // These test nodes that exist but have runtime issues
-  test.skip('count table rows - FAILS: Input type not supported', async () => {});
-  test.skip('rename column - needs investigation', async () => {});
-  test.skip('enumerate - different behavior than expected', async () => {});
-  test.skip('get record field - needs investigation', async () => {});
-  test.skip('first/last - needs investigation', async () => {});
+describe('Table Nodes - count, rename, first, last, enumerate, get', () => {
+  test('count: table row count', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Alice 30] [Bob 25] [Charlie 35]]' } },
+        { id: 'op', type: 'count', params: {} },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toBe(3);
+  });
+
+  test('rename: column name change', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Alice 30] [Bob 25]]' } },
+        { id: 'op', type: 'rename', params: { from: 'age', to: 'years' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result[0].years).toBe(30);
+    expect(res.result[1].years).toBe(25);
+    expect(res.result[0].name).toBe('Alice');
+  });
+
+  test('first: first N rows of table', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Alice 30] [Bob 25] [Charlie 35]]' } },
+        { id: 'op', type: 'first', params: { n: '2' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toHaveLength(2);
+    expect(res.result[0].name).toBe('Alice');
+    expect(res.result[1].name).toBe('Bob');
+  });
+
+  test('last: last N rows of table', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Alice 30] [Bob 25] [Charlie 35]]' } },
+        { id: 'op', type: 'last', params: { n: '2' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toHaveLength(2);
+    expect(res.result[0].name).toBe('Bob');
+    expect(res.result[1].name).toBe('Charlie');
+  });
+
+  test('enumerate: list to indexed table', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '["a" "b" "c"]' } },
+        { id: 'op', type: 'enumerate', params: {} },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toHaveLength(3);
+    expect(res.result[0].index).toBe(0);
+    expect(res.result[0].value).toBe('a');
+    expect(res.result[1].index).toBe(1);
+    expect(res.result[1].value).toBe('b');
+    expect(res.result[2].index).toBe(2);
+    expect(res.result[2].value).toBe('c');
+  });
+
+  test('get: record field access', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '{name: "Alice" age: 30}' } },
+        { id: 'op', type: 'get', params: { key: 'name' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toBe('Alice');
+  });
+
+  test('get: list index access', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '["first" "second" "third"]' } },
+        { id: 'op', type: 'get', params: { key: '1' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toBe('second');
+  });
 });
