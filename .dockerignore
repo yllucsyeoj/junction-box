@@ -11,3 +11,5 @@ data
 test.json
 testex.csv
 tsla10k.csv
+target/
+Dockerfile.build
