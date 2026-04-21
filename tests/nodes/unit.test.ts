@@ -345,8 +345,42 @@ describe('Integration - Multi-Node Chains', () => {
     expect(res.result.length).toBe(32); // md5 hex length
   });
 
-  test.skip('table: filter then sort - needs sort node', async () => {
-    // sort node may not be implemented yet
+  test('sort: ascending order', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Charlie 35] [Alice 30] [Bob 25]]' } },
+        { id: 'op', type: 'sort', params: { column: 'age', direction: 'asc' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toHaveLength(3);
+    expect(res.result[0].name).toBe('Bob');
+    expect(res.result[1].name).toBe('Alice');
+    expect(res.result[2].name).toBe('Charlie');
+  });
+
+  test('sort: descending order', async () => {
+    const res = await exec({
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[[name age]; [Bob 25] [Alice 30] [Charlie 35]]' } },
+        { id: 'op', type: 'sort', params: { column: 'age', direction: 'desc' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    });
+    expect(res.status).toBe('complete');
+    expect(res.result).toHaveLength(3);
+    expect(res.result[0].name).toBe('Charlie');
+    expect(res.result[1].name).toBe('Alice');
+    expect(res.result[2].name).toBe('Bob');
   });
 });
 
