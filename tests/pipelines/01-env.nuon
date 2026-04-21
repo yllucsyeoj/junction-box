@@ -1,9 +1,0 @@
-{
-  "nodes": [
-    {"id": "src", "type": "env", "position": {"x": 0, "y": 0}, "params": {"key": "HOME"}},
-    {"id": "out", "type": "return", "position": {"x": 200, "y": 0}, "params": {}}
-  ],
-  "edges": [
-    {"id": "e1", "from": "src", "from_port": "output", "to": "out", "to_port": "input"}
-  ]
-}
