@@ -10,7 +10,7 @@ export default function NodeLibrary({ specs }: Props) {
   const allCats = [...CATEGORY_ORDER, ...extraCats]
 
   const onDragStart = (e: React.DragEvent, name: string) => {
-    e.dataTransfer.setData('application/gonude-node', name)
+    e.dataTransfer.setData('application/junction-box-node', name)
     e.dataTransfer.effectAllowed = 'move'
   }
 

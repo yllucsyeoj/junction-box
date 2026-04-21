@@ -48,7 +48,7 @@ function logRun(entry: Record<string, unknown>, nodes?: NodeRunRecord[]): void {
 // extension — this handles both NUON and JSON-compatible syntax reliably.
 // ---------------------------------------------------------------------------
 function nuonToGraph(nuonText: string): { ok: true; graph: unknown } | { ok: false; error: string } {
-  const tmpPath = `/tmp/gonude-parse-${Date.now()}-${Math.random().toString(36).slice(2)}.nuon`
+  const tmpPath = `/tmp/junction-box-parse-${Date.now()}-${Math.random().toString(36).slice(2)}.nuon`
   try {
     writeFileSync(tmpPath, nuonText)
     const proc = Bun.spawnSync(['nu', '-c', `open '${tmpPath}' | to json`], {

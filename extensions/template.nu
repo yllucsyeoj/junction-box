@@ -161,7 +161,7 @@ export def "prim-template-api" [
     --id: string = "1"    # Post ID (1–100)
 ]: nothing -> record {
     let raw = (http get
-        -H {User-Agent: "gonude-extension/1.0"}
+        -H {User-Agent: "junction-box-extension/1.0"}
         $"https://jsonplaceholder.typicode.com/posts/($id | into int)")
     {
         id:      $raw.id

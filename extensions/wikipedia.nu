@@ -40,7 +40,7 @@ export const WIKIPEDIA_PRIMITIVE_META = {
     }
 }
 
-const WIKI_UA   = "Mozilla/5.0 (compatible; gonude-wikipedia/1.0)"
+const WIKI_UA   = "Mozilla/5.0 (compatible; junction-box-wikipedia/1.0)"
 const WIKI_API  = "https://en.wikipedia.org/w/api.php"
 const WIKI_REST = "https://en.wikipedia.org/api/rest_v1"
 

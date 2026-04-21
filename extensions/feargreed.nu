@@ -19,7 +19,7 @@ export const FEARGREED_PRIMITIVE_META = {
     }
 }
 
-const FG_UA = "Mozilla/5.0 (compatible; gonude-feargreed/1.0)"
+const FG_UA = "Mozilla/5.0 (compatible; junction-box-feargreed/1.0)"
 
 # ── Primitives ────────────────────────────────────────────────────────────────
 

@@ -32,7 +32,7 @@ export const REDDIT_PRIMITIVE_META = {
     }
 }
 
-const REDDIT_UA   = "Mozilla/5.0 (compatible; gonude-reddit/1.0)"
+const REDDIT_UA   = "Mozilla/5.0 (compatible; junction-box-reddit/1.0)"
 const REDDIT_BASE = "https://old.reddit.com"
 
 # ── Private helpers ───────────────────────────────────────────────────────────

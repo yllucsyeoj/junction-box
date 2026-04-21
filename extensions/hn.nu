@@ -24,7 +24,7 @@ export const HN_PRIMITIVE_META = {
     }
 }
 
-const HN_UA = "Mozilla/5.0 (compatible; gonude-hn/1.0)"
+const HN_UA = "Mozilla/5.0 (compatible; junction-box-hn/1.0)"
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 

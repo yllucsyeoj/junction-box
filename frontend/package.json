@@ -1,5 +1,5 @@
 {
-  "name": "gonude-frontend",
+  "name": "junction-box-frontend",
   "type": "module",
   "scripts": {
     "dev": "vite",

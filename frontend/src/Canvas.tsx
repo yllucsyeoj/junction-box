@@ -90,7 +90,7 @@ export default function Canvas({ nodeSpecs, nodeStatuses, appNodeParams, appNode
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-    const nodeType = e.dataTransfer.getData('application/gonude-node')
+    const nodeType = e.dataTransfer.getData('application/junction-box-node')
     if (!nodeType || !rfInstance || !wrapperRef.current) return
 
     const bounds = wrapperRef.current.getBoundingClientRect()

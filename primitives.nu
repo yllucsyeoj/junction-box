@@ -12,6 +12,11 @@ export const PRIMITIVE_META = {
     rm:            {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Remove a file at the given path", param_options: {}}
     mkdir:         {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Create a directory (and parents) at the given path", param_options: {}}
     date_now:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Return the current date and time as a datetime value", param_options: {}}
+    date_add:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Add a duration to a datetime. amount examples: 1day, 2hr, 30min, -7day", param_options: {}}
+    to_timezone:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Convert datetime to a different timezone", param_options: {}}
+    list_timezone: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "List available timezone names", param_options: {}}
+    into_filesize: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 5MB into a filesize value", param_options: {}}
+    into_duration: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 1hr 30min into a duration value", param_options: {}}
     filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"
                    param_options: {op: ["==", "!=", ">", "<", "contains"]}}
     map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
@@ -55,6 +60,17 @@ export const PRIMITIVE_META = {
     batch:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Split a list into chunks of --size elements. Returns a list of lists.", param_options: {}}
     window:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rolling N-row window aggregate over a table column. Adds a rolling result column."
                    param_options: {op: ["avg", "sum", "min", "max"]}}
+    items:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Convert a record to a [{key, value}] table — complement to columns.", param_options: {}}
+    find:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Find the index of the first list element matching a condition ($in = element).", param_options: {}}
+    row:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a row at a specific index from a table.", param_options: {}}
+    move:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Move a column to a new position in a table. Use --before to insert before another column.", param_options: {}}
+    chunk_by:      {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Group consecutive list elements by a predicate — splits when value changes.", param_options: {}}
+    match:         {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Multi-way conditional: match a value against patterns. Patterns separated by spaces, each pattern:result pair colon-delimited."
+                   param_options: {}}
+    try:           {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Try an expression, return fallback NUON on error.", param_options: {}}
+    catch:         {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Catch errors and handle them with a handler expression.", param_options: {}}
+    for:           {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Iterate over a list, accumulate results. $in = current element, $acc built up in --init accumulator.", param_options: {}}
+    while:         {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "While loop with condition and body expressions. --max-iter prevents infinite loops.", param_options: {}}
     display:       {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Display the value (writes to stderr) and pass it through — safe to use mid-pipeline.", param_options: {}}
     file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: json, csv, text, or nuon"
                    param_options: {format: ["json", "csv", "text", "nuon"]}}
@@ -66,14 +82,27 @@ export const PRIMITIVE_META = {
                    agent_hint: "Send a table to an LLM for analysis. Formats rows as numbered items [1]..[N] so the model can cite sources by number. --fields selects which columns to include (comma-sep; default: all except noise cols). --prompt sets the task. Returns a string."
                    param_options: {}}
     http_post:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP POST request — pipe body in, get response back", param_options: {}}
+    http_put:      {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP PUT request — pipe body in, get response back", param_options: {}}
+    http_delete:   {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP DELETE request", param_options: {}}
+    http_patch:    {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP PATCH request — pipe body in, get response back", param_options: {}}
+    http_head:     {category: "external",  color: "#a855f7", wirable: [],               agent_hint: "HTTP HEAD request — returns headers only", param_options: {}}
+    hash:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Compute hash of a string: md5, sha256", param_options: {algo: ["md5", "sha256"]}}
+    encode_base64: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Encode a string to base64", param_options: {}}
+    decode_base64: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a base64 string to plain text", param_options: {}}
+    encode_hex:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Encode a string to hex", param_options: {}}
+    decode_hex:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a hex string to plain text", param_options: {}}
     math:          {category: "compute",   color: "#eab308", wirable: ["operand"],      agent_hint: "Apply a math operation (+, -, *, /) to a number. Wire a number to --operand for multi-input."
                    param_options: {op: ["+", "-", "*", "/"]}}
-    string_op:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace (arg: old:new)"
-                   param_options: {op: ["upcase", "downcase", "trim", "length", "split", "replace"]}}
+    string_op:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a string operation: upcase, downcase, trim, length, split, replace, starts-with, ends-with, contains, substring (arg: old:new)"
+                   param_options: {op: ["upcase", "downcase", "trim", "length", "split", "replace", "starts-with", "ends-with", "contains", "substring"]}}
+    compact:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Remove null values from a list or table", param_options: {}}
+    glob:          {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Find files matching a glob pattern (e.g. **/*.json)", param_options: {}}
+    path_parse:     {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Parse a file path into its components (dir, stem, extension)", param_options: {}}
+    path_join:     {category: "file",      color: "#f97316", wirable: [],               agent_hint: "Join path components into a full path", param_options: {}}
     type_cast:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Cast a value to a target type: int, float, string, bool"
                    param_options: {target: ["int", "float", "string", "bool"]}}
-    math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg on a list or table column"
-                   param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg"]}}
+    math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg/sqrt/median/stddev on a list or table column"
+                   param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg", "sqrt", "median", "stddev"]}}
     each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list. Use $in for the current element. e.g. $in * 2", param_options: {}}
     str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable. Param values are plain strings — do NOT use NUON quoting (set prefix to label= not \\\"label=\\\").", param_options: {}}
     str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
@@ -83,12 +112,11 @@ export const PRIMITIVE_META = {
     to_csv:        {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize a table to a CSV string", param_options: {}}
     to_text:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Convert any value to a plain text string (into string)", param_options: {}}
     to_nuon:       {category: "output",    color: "#22c55e", wirable: [], agent_hint: "Serialize any value to a NUON string (Nu's native format)", param_options: {}}
-    from_string:   {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Parse a string as JSON, NUON, or CSV into a value"
-                   param_options: {format: ["json", "nuon", "csv"]}}
+    from_string:   {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Parse a string as JSON, NUON, CSV, TOML, or YAML into a value"
+                   param_options: {format: ["json", "nuon", "csv", "toml", "yaml"]}}
     row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row. IMPORTANT: when using --as_col, the expression must return a scalar (string/number/bool) — returning the whole row record creates a nested column that breaks downstream filter comparisons.", param_options: {}}
     date_format:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Format a datetime as a string using a strftime pattern (default: %Y-%m-%d %H:%M:%S)", param_options: {}}
     into_datetime: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Parse a string into a datetime value — optionally provide a --fmt strftime pattern", param_options: {}}
-    date_add:      {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Add a duration to a datetime. amount examples: 1day, 2hr, 30min, -7day", param_options: {}}
     if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: pass input through if condition is true, else return --fallback NUON value"
                    param_options: {op: ["==", "!=", ">", "<", "is-empty", "is-not-empty"]}}
     # NOTE: conditional routing (if/else branching to different downstream nodes) is a
@@ -375,8 +403,8 @@ export def "prim-math" [
 
 # Apply a string operation
 export def "prim-string-op" [
-    --op: string = "upcase"      # Operation: upcase, downcase, trim, length, split, replace
-    --arg: string = ""           # Arg for split (delimiter) or replace (old:new)
+    --op: string = "upcase"      # Operation: upcase, downcase, trim, length, split, replace, starts-with, ends-with, contains, substring
+    --arg: string = ""           # Arg for split (delimiter), replace (old:new), starts-with/ends-with/contains (needle), substring (start:end)
 ]: string -> any {
     let s = $in
     match $op {
@@ -389,7 +417,14 @@ export def "prim-string-op" [
             let parts = ($arg | split row ":" | first 2)
             $s | str replace ($parts | get 0) ($parts | get 1)
         }
-        _ => { error make {msg: $"Unknown string op: ($op). Valid: upcase, downcase, trim, length, split, replace"} }
+        "starts-with" => { $s | str starts-with $arg }
+        "ends-with" => { $s | str ends-with $arg }
+        "contains" => { $s | str contains $arg }
+        "substring" => {
+            let parts = ($arg | split row ":" | each {|x| $x | into int })
+            $s | str substring ($parts | get 0)..<($parts | get 1)
+        }
+        _ => { error make {msg: $"Unknown string op: ($op). Valid: upcase, downcase, trim, length, split, replace, starts-with, ends-with, contains, substring"} }
     }
 }
 
@@ -466,13 +501,15 @@ export def "prim-to-csv"  []: any -> string { $in | to csv }
 export def "prim-to-text" []: any -> string { $in | into string }
 export def "prim-to-nuon" []: any -> string { $in | to nuon }
 
-# Parse a string as json, nuon, or csv
+# Parse a string as json, nuon, csv, toml, or yaml
 export def "prim-from-string" [
-    --format: string = "json"      # Input format: json, nuon, csv
+    --format: string = "json"      # Input format: json, nuon, csv, toml, yaml
 ]: string -> any {
     match $format {
         "csv" => { $in | from csv }
         "nuon" => { $in | from nuon }
+        "toml" => { $in | from toml }
+        "yaml" => { $in | from yaml }
         _ => { $in | from json }
     }
 }
@@ -498,6 +535,36 @@ export def "prim-mkdir" [
     --path: string = ""              # Directory path to create
 ]: nothing -> nothing {
     mkdir $path
+}
+
+# Find files matching a glob pattern
+export def "prim-glob" [
+    --pattern: string = ""          # Glob pattern (e.g. **/*.json, *.txt)
+]: nothing -> list {
+    glob $pattern
+}
+
+# Parse a file path into its components
+export def "prim-path-parse" [
+]: string -> record {
+    let p = $in
+    let abs = ($p | path expand)
+    let parsed = ($abs | path parse)
+    {
+        full: $abs
+        dir: ($parsed | get parent)
+        stem: ($parsed | get stem)
+        extension: ($parsed | get extension)
+    }
+}
+
+# Join path components into a full path
+export def "prim-path-join" [
+    --parts: string = ""            # Space-separated path components to join
+]: string -> string {
+    let base = $in
+    let components = ($parts | split row " " | where {|c| $c != ""})
+    $base | path join ...$components
 }
 
 # ── Record / object operation primitives ─────────────────────────────────────
@@ -571,7 +638,10 @@ export def "prim-math-fn" [
         "min"   => { $data | math min }
         "max"   => { $data | math max }
         "avg"   => { $data | math avg }
-        _ => { error make {msg: $"Unknown math fn: ($op). Valid: round, floor, ceil, abs, sum, min, max, avg"} }
+        "sqrt"  => { $data | math sqrt }
+        "median" => { $data | math median }
+        "stddev" => { $data | math stddev }
+        _ => { error make {msg: $"Unknown math fn: ($op). Valid: round, floor, ceil, abs, sum, min, max, avg, sqrt, median, stddev"} }
     }
 }
 
@@ -701,6 +771,11 @@ export def "prim-flatten" []: list -> list {
 # Reverse a list or table
 export def "prim-reverse" []: any -> any {
     $in | reverse
+}
+
+# Remove null values from a list or table
+export def "prim-compact" []: any -> any {
+    $in | compact
 }
 
 # Skip the first N rows/elements
@@ -945,4 +1020,263 @@ export def "prim-row-apply" [
             $row | upsert $as_col $result
         }
     }
+}
+
+# ── Record / list introspection primitives ───────────────────────────────────
+
+# Convert a record to a [{key, value}] table (complement to `columns`)
+export def "prim-items" []: record -> table {
+    $in | items {|key, value| {key: $key, value: $value}}
+}
+
+# Find the index of the first element matching a condition
+export def "prim-find" [
+    --expr: string = "$in"            # Nu expression — $in is current element, should return bool
+]: list -> int {
+    let list = $in
+    let len = ($list | length)
+    mut index = -1
+    for i in 0..<$len {
+        let elem = ($list | get $i)
+        let matches = (nu -c $"(($elem | to nuon)) | do { ($expr) } | to nuon" | from nuon)
+        if $matches {
+            $index = $i
+            break
+        }
+    }
+    $index
+}
+
+# Get a row at a specific index from a table
+export def "prim-row" [
+    --index: string = "0"             # 0-based row index to retrieve
+]: table -> record {
+    $in | get ($index | into int)
+}
+
+# Move a column to a new position in a table
+export def "prim-move" [
+    --column: string = ""             # Column to move
+    --before: string = ""             # Insert before this column (empty = move to end)
+]: table -> table {
+    let input = $in
+    let cols = ($input | columns)
+    let col_idx = ($cols | enumerate | where $in.item == $column | get 0.index | into int)
+    if ($col_idx | is-empty) {
+        error make {msg: $"Column not found: ($column)"}
+    } else {
+        let other_cols = ($cols | where {|c| $c != $column})
+        let new_order = if ($before | is-empty) {
+            $other_cols | append $column
+        } else {
+            let before_idx = ($other_cols | enumerate | where $in.item == $before | get 0.index | into int)
+            if ($before_idx | is-empty) {
+                error make {msg: $"Column not found: ($before)"}
+            } else {
+                mut result = []
+                for i in 0..<($other_cols | length) {
+                    if $i == $before_idx {
+                        $result = ($result | append $column)
+                    }
+                    $result = ($result | append ($other_cols | get $i))
+                }
+                $result
+            }
+        }
+        $input | select ...$new_order
+    }
+}
+
+# Group consecutive list elements by a predicate
+# Returns a list of chunks where the predicate result changes
+export def "prim-chunk-by" [
+    --expr: string = "$in"            # Nu expression — $in is current element, should return comparable value
+]: list -> list {
+    $in | chunk-by {|elem|
+        nu -c $"(($elem | to nuon)) | do { ($expr) } | to nuon" | from nuon
+    }
+}
+
+# ── Match / conditional branching ────────────────────────────────────────────
+
+# Multi-way conditional: match a value against patterns and return corresponding result
+export def "prim-match" [
+    --value: string = ""              # Value to match against (empty = match $in)
+    --pattern: string = ""            # Space-separated pattern:result pairs (e.g. "foo:FOO bar:BAR default:DEFAULT")
+    --default: string = "null"        # Default result when no pattern matches
+]: any -> any {
+    let v = if ($value | is-empty) { $in } else { $value }
+    let pairs = ($pattern | split row " " | each {|p|
+        let parts = ($p | split row ":" | first 2)
+        {pattern: ($parts | get 0), result: ($parts | get 1)}
+    })
+    mut result = null
+    mut found = false
+    for pair in $pairs {
+        if $v == $pair.pattern and not $found {
+            $result = (try { $pair.result | from nuon } catch { $pair.result })
+            $found = true
+        }
+    }
+    if not $found {
+        $result = (try { $default | from nuon } catch { $default })
+    }
+    $result
+}
+
+# ── Error handling primitives ───────────────────────────────────────────────────
+
+# Try executing an expression, return fallback on error
+export def "prim-try" [
+    --fallback: string = "null"        # NUON value to return on error
+    --expr: string = "$in"           # Nu expression to try
+]: any -> any {
+    try {
+        nu -c $"(($in | to nuon)) | do { ($expr) } | to nuon" | from nuon
+    } catch {
+        $fallback | from nuon
+    }
+}
+
+# Catch errors from a preceding try with a handler expression
+export def "prim-catch" [
+    --handler: string = "{}"          # Handler expression that receives the error as $in
+    --expr: string = "$in"           # Nu expression that may fail
+]: any -> any {
+    try {
+        nu -c $"(($in | to nuon)) | do { ($expr) } | to nuon" | from nuon
+    } catch {|err| 
+        nu -c $"(($err | to nuon)) | do { ($handler) } | to nuon" | from nuon
+    }
+}
+
+# ── Iteration primitives ───────────────────────────────────────────────────────
+
+# For loop: iterate over a list and accumulate results
+# Each iteration receives {elem: current_item, acc: accumulator} — expression returns value to append
+export def "prim-for" [
+    --over: string = "[]"            # List to iterate over (as NUON)
+    --init: string = "[]"           # Initial accumulator value
+    --expr: string = "$in"          # Nu expression — $in is {elem, acc}, should return value to append
+]: any -> any {
+    let items = ($over | from nuon)
+    mut acc = ($init | from nuon)
+    for item in $items {
+        let input = {elem: $item, acc: $acc}
+        let result = (nu -c $"(($input | to nuon)) | do { ($expr) } | to nuon" | from nuon)
+        $acc = ($acc | append $result)
+    }
+    $acc
+}
+
+# While loop: repeat while condition is true
+export def "prim-while" [
+    --init: string = "{}"            # Initial state value
+    --cond: string = "$in"          # Condition expression — should return bool
+    --body: string = "$in"          # Body expression — runs each iteration, $in is state
+    --max-iter: string = "1000"      # Maximum iterations to prevent infinite loops
+]: any -> any {
+    mut state = ($init | from nuon)
+    let max = ($max_iter | into int)
+    mut iter = 0
+    while $iter < $max {
+        let cond_result = (nu -c $"(($state | to nuon)) | do { ($cond) } | to nuon" | from nuon | into bool)
+        if not $cond_result {
+            break
+        }
+        $state = (nu -c $"(($state | to nuon)) | do { ($body) } | to nuon" | from nuon)
+        $iter = $iter + 1
+    }
+    $state
+}
+
+# ── Hash / crypto primitives ──────────────────────────────────────────────────
+
+# Compute hash of a string or binary
+export def "prim-hash" [
+    --algo: string = "sha256"        # Hash algorithm: md5, sha256
+]: string -> string {
+    match $algo {
+        "md5" => { $in | hash md5 }
+        "sha256" => { $in | hash sha256 }
+        _ => { error make {msg: $"Unknown hash algo: ($algo). Valid: md5, sha256"} }
+    }
+}
+
+# Encode string to base64
+export def "prim-encode-base64" []: string -> string {
+    $in | encode base64
+}
+
+# Decode base64 to string
+export def "prim-decode-base64" []: string -> string {
+    $in | decode base64 | decode
+}
+
+# Encode string to hex
+export def "prim-encode-hex" []: string -> string {
+    $in | encode hex
+}
+
+# Decode hex to string
+export def "prim-decode-hex" []: string -> string {
+    $in | decode hex | decode
+}
+
+# ── HTTP method primitives ─────────────────────────────────────────────────────
+
+# HTTP PUT request
+export def "prim-http-put" [
+    --url: string = ""               # URL to PUT to
+    --content-type: string = "application/json"  # Content-Type header
+]: any -> any {
+    $in | to json | http put $url --content-type $content_type
+}
+
+# HTTP DELETE request
+export def "prim-http-delete" [
+    --url: string = ""               # URL to DELETE
+]: any -> any {
+    http delete $url
+}
+
+# HTTP PATCH request
+export def "prim-http-patch" [
+    --url: string = ""               # URL to PATCH
+    --content-type: string = "application/json"  # Content-Type header
+]: any -> any {
+    $in | to json | http patch $url --content-type $content_type
+}
+
+# HTTP HEAD request
+export def "prim-http-head" [
+    --url: string = ""               # URL to HEAD
+]: any -> record {
+    http head $url
+}
+
+# ── Date / timezone primitives ────────────────────────────────────────────────
+
+# Convert datetime to a different timezone
+export def "prim-to-timezone" [
+    --zone: string = "UTC"          # Target timezone (e.g. America/New_York, Europe/London)
+]: datetime -> datetime {
+    $in | date to-timezone $zone
+}
+
+# List available timezone names
+export def "prim-list-timezone" []: nothing -> list {
+    date list-timezone
+}
+
+# ── Conversion primitives ─────────────────────────────────────────────────────
+
+# Convert a string into a filesize value (e.g. "5MB" -> 5_000_000 bytes)
+export def "prim-into-filesize" []: string -> filesize {
+    $in | into filesize
+}
+
+# Convert a string into a duration value (e.g. "1hr 30min" -> 90min)
+export def "prim-into-duration" []: string -> duration {
+    $in | into duration
 }

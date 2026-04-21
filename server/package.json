@@ -1,5 +1,5 @@
 {
-  "name": "gonude-server",
+  "name": "junction-box-server",
   "type": "module",
   "scripts": {
     "dev": "bun run --watch index.ts",

@@ -13,7 +13,7 @@ export const RSS_PRIMITIVE_META = {
     }
 }
 
-const RSS_UA = "Mozilla/5.0 (compatible; gonude-rss/1.0)"
+const RSS_UA = "Mozilla/5.0 (compatible; junction-box-rss/1.0)"
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 
