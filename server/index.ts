@@ -209,6 +209,155 @@ app.get('/defs', (c) => {
 })
 
 // ---------------------------------------------------------------------------
+// GET /patterns — pre-built common pipeline patterns
+// ---------------------------------------------------------------------------
+app.get('/patterns', (c) => c.json({
+  description: 'Common pipeline patterns. Copy, modify, POST to /exec.',
+  patterns: [
+    {
+      name: 'fetch-filter-sort',
+      description: 'GET data, filter rows, sort by column',
+      nodes: [
+        { id: 'fetch', type: 'fetch', params: { url: 'https://jsonplaceholder.typicode.com/users' } },
+        { id: 'filter', type: 'filter', params: { column: 'address.city', op: 'contains', value: '"G"' } },
+        { id: 'sort', type: 'sort', params: { column: 'name', direction: 'asc' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'fetch', from_port: 'output', to: 'filter', to_port: 'input' },
+        { id: 'e2', from: 'filter', from_port: 'output', to: 'sort', to_port: 'input' },
+        { id: 'e3', from: 'sort', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'extract-nested-field',
+      description: 'Navigate into nested JSON to extract a specific value',
+      nodes: [
+        { id: 'fetch', type: 'fetch', params: { url: 'https://jsonplaceholder.typicode.com/users/1' } },
+        { id: 'get', type: 'get', params: { key: 'address' } },
+        { id: 'get2', type: 'get', params: { key: 'city' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'fetch', from_port: 'output', to: 'get', to_port: 'input' },
+        { id: 'e2', from: 'get', from_port: 'output', to: 'get2', to_port: 'input' },
+        { id: 'e3', from: 'get2', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'table-join',
+      description: 'Join two tables on a shared column (SQL-style inner join)',
+      nodes: [
+        { id: 'left', type: 'const', params: { value: '[[id name]; [1 alice] [2 bob] [3 carol]]' } },
+        { id: 'right', type: 'const', params: { value: '[[id score]; [1 95] [2 87] [4 100]]' } },
+        { id: 'join', type: 'join', params: { on: 'id', type: 'inner', right: '[]' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'left', from_port: 'output', to: 'join', to_port: 'input' },
+        { id: 'e2', from: 'right', from_port: 'output', to: 'join', to_port: 'right' },
+        { id: 'e3', from: 'join', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'group-aggregate',
+      description: 'Group rows by column, compute aggregate per group',
+      nodes: [
+        { id: 'data', type: 'const', params: { value: '[[cat val]; [A 10] [A 30] [B 5] [B 15] [A 20]]' } },
+        { id: 'group', type: 'group-by', params: { column: 'cat' } },
+        { id: 'agg', type: 'group-agg', params: { column: 'val', op: 'avg' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'data', from_port: 'output', to: 'group', to_port: 'input' },
+        { id: 'e2', from: 'group', from_port: 'output', to: 'agg', to_port: 'input' },
+        { id: 'e3', from: 'agg', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'transform-list',
+      description: 'Apply expression to each element of a list',
+      nodes: [
+        { id: 'list', type: 'const', params: { value: '[1, 2, 3, 4, 5]' } },
+        { id: 'each', type: 'each', params: { expr: '$in * $in' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'list', from_port: 'output', to: 'each', to_port: 'input' },
+        { id: 'e2', from: 'each', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'string-interpolation',
+      description: 'Insert record fields into a template string',
+      nodes: [
+        { id: 'record', type: 'const', params: { value: '{name: "Alice", score: 95}' } },
+        { id: 'tmpl', type: 'str-interp', params: { template: 'Player {name} scored {score} points!' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'record', from_port: 'output', to: 'tmpl', to_port: 'input' },
+        { id: 'e2', from: 'tmpl', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'column-select-rename',
+      description: 'Select specific columns, rename one',
+      nodes: [
+        { id: 'data', type: 'const', params: { value: '[[name age city score]; [alice 30 NYC 95] [bob 25 LA 87] [carol 35 NYC 92]]' } },
+        { id: 'select', type: 'select', params: { columns: 'name score' } },
+        { id: 'rename', type: 'rename', params: { from: 'score', to: 'grade' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'data', from_port: 'output', to: 'select', to_port: 'input' },
+        { id: 'e2', from: 'select', from_port: 'output', to: 'rename', to_port: 'input' },
+        { id: 'e3', from: 'rename', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'rolling-window-aggregate',
+      description: 'Compute rolling average over N rows',
+      nodes: [
+        { id: 'data', type: 'const', params: { value: '[[day price]; [1 100] [2 102] [3 98] [4 105] [5 103] [6 107]]' } },
+        { id: 'window', type: 'window', params: { column: 'price', size: '3', op: 'avg', as_col: 'ma3' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'data', from_port: 'output', to: 'window', to_port: 'input' },
+        { id: 'e2', from: 'window', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'conditional-fallback',
+      description: 'If condition is true return input, else return fallback',
+      nodes: [
+        { id: 'value', type: 'const', params: { value: '42' } },
+        { id: 'check', type: 'if', params: { column: '', op: '>', value: '10', fallback: '0' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'value', from_port: 'output', to: 'check', to_port: 'input' },
+        { id: 'e2', from: 'check', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+    {
+      name: 'column-statistics',
+      description: 'Compute count/sum/avg/min/max for a numeric column',
+      nodes: [
+        { id: 'data', type: 'const', params: { value: '[[price]; [100] [102] [98] [105] [103]]' } },
+        { id: 'stats', type: 'col-stats', params: { column: 'price' } },
+        { id: 'return', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'data', from_port: 'output', to: 'stats', to_port: 'input' },
+        { id: 'e2', from: 'stats', from_port: 'output', to: 'return', to_port: 'input' },
+      ],
+    },
+  ],
+}))
+
+// ---------------------------------------------------------------------------
 // POST /exec — synchronous agent endpoint
 //
 // Accepts (three forms):
