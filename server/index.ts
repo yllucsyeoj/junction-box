@@ -65,46 +65,124 @@ function nuonToGraph(nuonText: string): { ok: true; graph: unknown } | { ok: fal
 }
 
 // ---------------------------------------------------------------------------
-// GET / — agent-oriented API manifest
-// The first thing a model should call to understand this API.
+// GET / — comprehensive LLM manual
+// After ONE call, an LLM should know how to construct any pipeline.
 // ---------------------------------------------------------------------------
 app.get('/', (c) => c.json({
-  name: 'GoNude Pipeline API',
-  description: 'Node-based dataflow engine. POST a graph of nodes+edges to /exec and get back results. Call GET /defs first to learn all available node types.',
-  quick_start: [
-    '1. GET /defs — fetch all node types with schemas and example graphs',
-    '2. POST /exec with {nodes, edges} — run a pipeline synchronously, get back {result}',
-    '3. POST /patch to save a working graph; GET /patches to list saved ones',
-  ],
+  name: 'Junction Box Pipeline API',
+  version: '1.0',
+  description: 'Node-based dataflow engine. Compose nodes into a graph, POST to /exec, get back transformed data. Designed for LLMs to autonomously fetch, filter, transform, and extract data from any source.',
+
+  // ── Quick Start ──────────────────────────────────────────────────────────
+  quick_start: {
+    step_1: { action: 'GET /defs', purpose: 'Learn all 131 available node types with examples' },
+    step_2: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
+    step_3: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back' },
+    step_4: { action: 'POST /patch to save', purpose: 'Store a working graph for reuse' },
+  },
+
+  // ── Core Concept ─────────────────────────────────────────────────────────
+  concept: {
+    description: 'A pipeline is a directed graph of nodes. Data flows from left to right along edges.',
+    anatomy: {
+      node: 'A processing step with: id (unique name), type (what it does), params (configuration)',
+      edge: 'A connection: from node + from_port → to node + to_port',
+      data_flow: 'Leftmost nodes produce data. Rightmost nodes consume it. Every node needs an incoming edge.',
+    },
+    result_field: 'The output of the "return" node (or the last node if no return) becomes the pipeline result.',
+  },
+
+  // ── Graph Format ──────────────────────────────────────────────────────────
+  graph_format: {
+    example: {
+      nodes: [
+        { id: 'src', type: 'const', params: { value: '[1, 2, 3]' } },
+        { id: 'op', type: 'each', params: { expr: '$in * 2' } },
+        { id: 'out', type: 'return', params: {} },
+      ],
+      edges: [
+        { id: 'e1', from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+        { id: 'e2', from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+      ],
+    },
+    rules: [
+      'Every node needs a unique id (lowercase, hyphens ok)',
+      'Every non-source node needs an incoming edge',
+      'Edges connect: from node id + "output" → to node id + "input"',
+      'Source nodes (const, fetch, date-now, env) have no incoming edge',
+      'Terminal nodes (return) should be the rightmost',
+    ],
+  },
+
+  // ── Node Categories ────────────────────────────────────────────────────────
+  categories: {
+    input: { description: 'Produce data: const (fixed value), fetch (HTTP GET), env, file-in', color: '#f97316' },
+    transform: { description: 'Filter rows, sort, select columns, extract fields, map, reduce, join tables, group, window', color: '#3b82f6' },
+    compute: { description: 'Math, string ops, type conversion, encoding/decoding, hashing, each (list transform)', color: '#eab308' },
+    datetime: { description: 'Current time, format dates, parse dates, timezone conversion', color: '#06b6d4' },
+    logic: { description: 'Conditionals (if), loops (for/while), error handling (try/catch), pattern matching', color: '#ec4899' },
+    output: { description: 'Return (pipeline result), display (debug), to-json/csv/text (serialize)', color: '#22c55e' },
+    file: { description: 'ls, glob, mkdir, rm, path-join, path-parse', color: '#f97316' },
+    external: { description: 'HTTP POST/PUT/DELETE/PATCH, LLM calls, analyze', color: '#a855f7' },
+  },
+
+  // ── API Endpoints ─────────────────────────────────────────────────────────
   endpoints: {
-    'GET /': 'This manifest — start here',
+    'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
-    'GET /defs': 'Full node catalogue: all types, ports, params, wirable flags, example graphs — call this before building any graph',
-    'GET /defs/:type': 'Single node definition + example',
-    'GET /nodes': 'Raw node spec (no examples — prefer /defs)',
-    'POST /exec': 'Run a graph synchronously → {status, result, outputs, errors}. Accepts JSON graph or NUON (text/plain) or {alias: "name"}',
-    'GET /patches': 'List saved patches (alias, description, node_types, created_at)',
-    'GET /patch/:alias': 'Retrieve a saved patch',
-    'POST /patch': 'Save a graph as a named patch — body: {alias, description, graph}',
-    'DELETE /patch/:alias': 'Delete a saved patch',
-    'GET /logs': 'Recent execution log entries',
+    'GET /defs': 'All 131 node types with schemas, params, ports, examples — call this first',
+    'GET /defs/:type': 'Single node definition with example',
+    'GET /patterns': '10 pre-built common pipeline patterns ready to copy/use',
+    'GET /nodes': 'Raw node spec (no examples)',
+    'POST /exec': 'Run a pipeline → {status, result, outputs, errors}',
+    'POST /patch': 'Save a graph: {alias, description, graph}',
+    'GET /patches': 'List saved patches',
+    'GET /patch/:alias': 'Get a saved patch',
+    'DELETE /patch/:alias': 'Delete a patch',
+    'GET /logs': 'Recent execution log',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
   },
-  graph_format: {
-    nodes: [{ id: 'string', type: 'node-type-name', params: { param_name: 'value' } }],
-    edges: [{ id: 'string', from: 'node-id', from_port: 'output', to: 'node-id', to_port: 'input' }],
-  },
+
+  // ── Critical Gotchas ─────────────────────────────────────────────────────
   gotchas: [
-    '`get` is single-level only — for nested keys like financials.revenue, chain two get nodes',
-    'Column names are exact-match and case-sensitive — screener/snapshot output uses snake_case (market_cap, not marketCap); run and inspect raw output when unsure',
-    '`get` does not index by position — `get "0"` on a table/list looks for a column named "0", not the first row; use `first` to get the top row, then `get field` to extract a value',
-    'Disconnected nodes (no incoming edge) still execute with null input and error silently — they do not halt the graph; always wire every node',
-    'A `return` node with no incoming edge runs immediately with null — always wire terminal nodes last',
-    '`str-interp` takes a record as input and substitutes {field} placeholders — works cleanly with market-snapshot and similar record-output nodes',
-    'POST /exec is the agent endpoint — synchronous JSON response with run_id, outputs, and result',
-    'YouTube nodes (youtube-channel, youtube-search, etc.) scrape youtube.com directly — they require outbound internet access; they will fail with "Network failure" in network-restricted environments',
-    'The llm node reads LLM_ENDPOINT and LLM_API_KEY from the server environment — set these at container/process start, not on the node. LLM_ENDPOINT empty = Anthropic cloud (uses LLM_API_KEY or ANTHROPIC_API_KEY). LLM_ENDPOINT set = OpenAI-compatible (LM Studio, OpenAI, etc.); LLM_API_KEY optional.',
+    {
+      issue: 'get is single-level only',
+      solution: 'For nested keys like data.id, chain: fetch → get "data" → get "id"',
+    },
+    {
+      issue: 'Column names are exact-match, case-sensitive',
+      solution: 'Market/screener outputs use snake_case (market_cap, not marketCap). Inspect output first.',
+    },
+    {
+      issue: 'get on a list/table by index does NOT work',
+      solution: 'Use "first" to get row 0, then "get fieldname" to extract. get "0" looks for column named "0".',
+    },
+    {
+      issue: 'Disconnected nodes still execute (with null input)',
+      solution: 'Always wire every node. Unconnected nodes run but get null input and error silently.',
+    },
+    {
+      issue: 'return node without incoming edge runs immediately with null',
+      solution: 'Wire return last, after all processing nodes.',
+    },
+    {
+      issue: 'NUON vs JSON for values',
+      solution: 'Use NUON: [[name age]; [Alice 30]] not JSON: [["name","age"],["Alice",30]]. Tables use spaces, not commas.',
+    },
+    {
+      issue: 'str-interp requires record input',
+      solution: 'Input must be a record like {name: "Alice"}. Template uses {field} placeholders.',
+    },
   ],
+
+  // ── Value Formats ─────────────────────────────────────────────────────────
+  value_formats: {
+    nuon_vs_json: 'NUON is Nushell Object Notation - more readable. Use it for params.',
+    table_syntax: '[[column1 column2]; [row1val1 row1val2] [row2val1 row2val2]]',
+    list_syntax: '[item1, item2, item3] or [1, 2, 3]',
+    record_syntax: '{key: "value", num: 42, list: [1, 2]}',
+    string_quoting: 'Use double quotes inside NUON: "hello" not \'hello\'. For nested quotes, escape: "He said \\"hi\\""',
+  },
 }))
 
 // ---------------------------------------------------------------------------
