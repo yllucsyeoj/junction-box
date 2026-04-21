@@ -350,17 +350,11 @@ describe('Integration - Multi-Node Chains', () => {
   });
 });
 
-describe('Known Issues - Nodes with Problems', () => {
-  test.skip('str-length - FAILS: needs string port connection', async () => {});
-  test.skip('str-upcase - FAILS: needs string port connection', async () => {});
-  test.skip('str-downcase - FAILS: needs string port connection', async () => {});
-  test.skip('str-starts-with - FAILS: needs string port connection', async () => {});
-  test.skip('str-ends-with - FAILS: needs string port connection', async () => {});
-  test.skip('str-contains - FAILS: needs string port connection', async () => {});
-  test.skip('type-cast - FAILS: wrong param name (to_type vs type)', async () => {});
-  test.skip('map - FAILS: input type mismatch', async () => {});
-  test.skip('select - FAILS: input type mismatch', async () => {});
-  test.skip('sort - FAILS: input type mismatch', async () => {});
-  test.skip('encode-hex - FAILS: returns uppercase', async () => {});
-  test.skip('list-timezone - FAILS: returns objects not strings', async () => {});
+describe('Known Issues - Nodes that need fixes', () => {
+  // These test nodes that exist but have runtime issues
+  test.skip('count table rows - FAILS: Input type not supported', async () => {});
+  test.skip('rename column - needs investigation', async () => {});
+  test.skip('enumerate - different behavior than expected', async () => {});
+  test.skip('get record field - needs investigation', async () => {});
+  test.skip('first/last - needs investigation', async () => {});
 });
