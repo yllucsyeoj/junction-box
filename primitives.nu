@@ -392,7 +392,7 @@ export def "prim-math" [
 ]: number -> number {
     let x = $in
     let operands = if (($operand | from json | describe) | str starts-with 'list') {
-        ($operand | from json)
+        ($operand | from json | each {|v| $v | into float })
     } else {
         [($operand | into float)]
     }
