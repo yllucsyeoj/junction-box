@@ -855,7 +855,7 @@ export def "prim-table-concat" [
 ]: table -> table {
     let extra = if (($more | from json | describe) | str starts-with 'list') {
         let tables = ($more | from json | each {|v| $v | from nuon})
-        if ($tables | length) > 0 { $tables | get 0 } else { [] | table }
+        $tables | flatten
     } else {
         ($more | from nuon)
     }
