@@ -733,12 +733,14 @@ export def "prim-str-concat" [
     let prefix_val = if (($prefix | from json | describe) | str starts-with 'list') {
         (($prefix | from json) | str join)
     } else {
-        $prefix
+        let p = ($prefix | from json)
+        if ($p | describe | str starts-with 'string') { $p } else { $prefix }
     }
     let suffix_val = if (($suffix | from json | describe) | str starts-with 'list') {
         (($suffix | from json) | str join)
     } else {
-        $suffix
+        let s = ($suffix | from json)
+        if ($s | describe | str starts-with 'string') { $s } else { $suffix }
     }
     $"($prefix_val)($in)($suffix_val)"
 }

@@ -1,0 +1,17 @@
+{
+  "description": "Combine HN and Reddit search results for AI into one unified list",
+  "graph": {
+    "nodes": [
+      {"id": "hn", "type": "hn-search", "params": {"query": "AI", "limit": "3"}},
+      {"id": "reddit", "type": "reddit-search", "params": {"query": "AI", "subreddit": "programming", "limit": "3"}},
+      {"id": "combined", "type": "table-concat", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "hn", "from_port": "output", "to": "combined", "to_port": "input"},
+      {"from": "reddit", "from_port": "output", "to": "combined", "to_port": "more"},
+      {"from": "combined", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"title": "Don't post generated/AI-edited comments..."}, {"title": "Bloom filters: the niche trick..."}]
+}
