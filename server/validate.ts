@@ -51,7 +51,7 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs'
   message: string
   suggestion: string
 }

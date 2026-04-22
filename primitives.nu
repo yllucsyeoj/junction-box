@@ -391,13 +391,19 @@ export def "prim-math" [
     --operand: string = "0"      # The second operand (as string, parsed to float)
 ]: number -> number {
     let x = $in
-    let n = ($operand | into float)
-    match $op {
-        "+" => { $x + $n }
-        "-" => { $x - $n }
-        "*" => { $x * $n }
-        "/" => { $x / $n }
-        _ => { error make {msg: $"Unknown math op: ($op). Valid: +, -, *, /"} }
+    let operands = if (($operand | from json | describe) | str starts-with 'list') {
+        ($operand | from json)
+    } else {
+        [($operand | into float)]
+    }
+    $operands | reduce --fold $x {|n, acc|
+        match $op {
+            "+" => { $acc + $n }
+            "-" => { $acc - $n }
+            "*" => { $acc * $n }
+            "/" => { $acc / $n }
+            _ => { error make {msg: $"Unknown math op: ($op). Valid: +, -, *, /"} }
+        }
     }
 }
 
@@ -573,7 +579,12 @@ export def "prim-path-join" [
 export def "prim-merge" [
     --with: string = "{}"            # NUON record to merge in (overlapping keys overwritten)
 ]: record -> record {
-    $in | merge ($with | from nuon)
+    let overlay = if (($with | from json | describe) | str starts-with 'list') {
+        ($with | from json | each {|v| $v | from nuon} | reduce {|item, acc| $acc | merge $item })
+    } else {
+        ($with | from nuon)
+    }
+    $in | merge $overlay
 }
 
 # Remove named columns from a table or record
@@ -719,7 +730,17 @@ export def "prim-str-concat" [
     --prefix: string = ""            # String to prepend (or wire an edge to this port)
     --suffix: string = ""            # String to append  (or wire an edge to this port)
 ]: string -> string {
-    $"($prefix)($in)($suffix)"
+    let prefix_val = if (($prefix | from json | describe) | str starts-with 'list') {
+        (($prefix | from json) | str join)
+    } else {
+        $prefix
+    }
+    let suffix_val = if (($suffix | from json | describe) | str starts-with 'list') {
+        (($suffix | from json) | str join)
+    } else {
+        $suffix
+    }
+    $"($prefix_val)($in)($suffix_val)"
 }
 
 # Template string interpolation — replace {field} placeholders from a record
@@ -752,14 +773,17 @@ export def "prim-url-decode" []: string -> string {
 export def "prim-append" [
     --items: string = "[]"           # NUON list or value to append (wire an edge to this port for multi-input)
 ]: any -> list {
-    let input = $in   # capture before any branching — $in is consumed on first use
-    let extra = ($items | from nuon)
-    let desc = ($extra | describe)
-    # tables describe as "table<...>", lists as "list<...>" — both are sequences we flatten in
-    if ($desc | str starts-with 'list') or ($desc | str starts-with 'table') {
-        $input | append $extra
+    let input = $in
+    let parsed = if (($items | from json | describe) | str starts-with 'list') {
+        ($items | from json | each {|v| $v | from nuon} | flatten)
     } else {
-        $input | append [$extra]
+        ($items | from nuon)
+    }
+    let desc = ($parsed | describe)
+    if ($desc | str starts-with 'list') or ($desc | str starts-with 'table') {
+        $input | append $parsed
+    } else {
+        $input | append [$parsed]
     }
 }
 
@@ -804,7 +828,17 @@ export def "prim-join" [
     --on: string = ""                # Column name to join on
     --type: string = "inner"         # Join type: inner or left
 ]: table -> table {
-    let r = ($right | from nuon)
+    let r = if (($right | from json | describe) | str starts-with 'list') {
+        let tables = ($right | from json | each {|v| $v | from nuon})
+        if ($tables | length) > 0 { $tables | get 0 } else { [] | table }
+    } else {
+        let parsed = ($right | from nuon)
+        if ($parsed | describe | str starts-with 'record') {
+            [$parsed] | table
+        } else {
+            $parsed
+        }
+    }
     if $type == "left" {
         $in | join $r $on --left
     } else {
@@ -819,7 +853,12 @@ export def "prim-join" [
 export def "prim-table-concat" [
     --more: string = "[]"            # Second table as NUON (wire an edge to this port)
 ]: table -> table {
-    let extra = ($more | from nuon)
+    let extra = if (($more | from json | describe) | str starts-with 'list') {
+        let tables = ($more | from json | each {|v| $v | from nuon})
+        if ($tables | length) > 0 { $tables | get 0 } else { [] | table }
+    } else {
+        ($more | from nuon)
+    }
     $in | append $extra
 }
 

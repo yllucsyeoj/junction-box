@@ -116,12 +116,15 @@ export async function runPipeline(
 
     for (const paramName of allParamNames) {
       const paramValue = (node.params ?? {})[paramName] ?? ''
-      const paramEdge = graph.edges.find(e => e.to === nodeId && e.to_port === paramName)
-      if (paramEdge) {
-        // Pass edge value via env var (JSON string). Primitives use from nuon internally —
-        // JSON is valid NUON syntax for all wire types (arrays, objects, primitives).
+      const paramEdges = graph.edges.filter(e => e.to === nodeId && e.to_port === paramName)
+      if (paramEdges.length > 0) {
         const envKey = `GONUDE_PARAM_${paramName.toUpperCase()}`
-        paramEnv[envKey] = outputs.get(paramEdge.from) ?? 'null'
+        if (paramEdges.length === 1) {
+          paramEnv[envKey] = outputs.get(paramEdges[0].from) ?? 'null'
+        } else {
+          const values = paramEdges.map(e => outputs.get(e.from) ?? 'null')
+          paramEnv[envKey] = JSON.stringify(values)
+        }
         resolvedFlags.push(`--${paramName} $env.${envKey}`)
       } else {
         // Escape string value for Nu — wrap in quotes, escape inner quotes
