@@ -822,27 +822,24 @@ export def "prim-wrap" []: any -> list {
 # ── Join primitive (multi-input) ──────────────────────────────────────────────
 
 # SQL-style join two tables on a shared column
-# Wire a second table to the --right port to use as a multi-input node
+# SQL-style join two tables on a shared column
+# Wire a second table to the --right port for multi-input
 export def "prim-join" [
-    --right: string = "[]"           # Right table as NUON (wire an edge to this port)
+    --right: string = "[]"           # Right table as NUON (wire edge to this port)
     --on: string = ""                # Column name to join on
     --type: string = "inner"         # Join type: inner or left
 ]: table -> table {
-    let r = if (($right | from json | describe) | str starts-with 'list') {
-        let tables = ($right | from json | each {|v| $v | from nuon})
-        if ($tables | length) > 0 { $tables | get 0 } else { [] | table }
+    let input = $in
+    let raw_r = if (($right | from json | describe) | str starts-with 'list') {
+        ($right | from json | each {|v| $v | from nuon})
     } else {
-        let parsed = ($right | from nuon)
-        if ($parsed | describe | str starts-with 'record') {
-            [$parsed] | table
-        } else {
-            $parsed
-        }
+        ($right | from nuon)
     }
+    let right_table = if ($raw_r | describe | str starts-with 'record') { [$raw_r] | table } else { $raw_r }
     if $type == "left" {
-        $in | join $r $on --left
+        $input | join $right_table $on --left
     } else {
-        $in | join $r $on
+        $input | join $right_table $on
     }
 }
 
