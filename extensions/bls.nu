@@ -89,14 +89,15 @@ export def "prim-bls-series" [
 export def "prim-bls-presets" [
 ]: nothing -> table {
     let key = (try { $env.BLS_API_KEY } catch { "" })
+    let ids = ($BLS_PRESETS | values)
     if not ($key | is-empty) {
-        let ids = ($BLS_PRESETS | values | str join ",")
-        prim-bls-series --series_ids $ids
+        prim-bls-series --series_ids ($ids | str join ",")
     } else {
-        let rows = []
-        for $id in ($BLS_PRESETS | values) {
-            let rows = ($rows | append (prim-bls-series --series_ids $id))
-        }
+        let rows = (prim-bls-series --series_ids ($ids.0))
+        let rows = ($rows | append (prim-bls-series --series_ids ($ids.1)))
+        let rows = ($rows | append (prim-bls-series --series_ids ($ids.2)))
+        let rows = ($rows | append (prim-bls-series --series_ids ($ids.3)))
+        let rows = ($rows | append (prim-bls-series --series_ids ($ids.4)))
         $rows
     }
 }
