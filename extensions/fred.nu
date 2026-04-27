@@ -66,7 +66,7 @@ export def "prim-fred-search" [
     let q = ($query | url encode)
     let url = $"https://api.stlouisfed.org/fred/series/search?search_text=($q)&api_key=($key)&file_type=json&limit=($limit | into int)"
     let raw = (http get -H {User-Agent: $FRED_UA} $url)
-    let results = (try { $raw.serials } catch { [] })
+    let results = (try { $raw.seriess } catch { [] })
     $results | each {|s|
         {
             series_id:  (try { $s.id   } catch { "" })
