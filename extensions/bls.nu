@@ -9,14 +9,14 @@ export const BLS_PRIMITIVE_META = {
         category: "bls"
         color: "#0891b2"
         wirable: []
-        agent_hint: "Fetch BLS labor/economic data by series ID. Returns a table with series_id, name, date, value. Common IDs: CUUR0000SA0 (CPI-U), LNS14000000 (Unemployment), CES0000000001 (Employment), CES0500000003 (Avg Hourly Earnings), WPSFD4 (PPI). Single series: no key needed. Multiple series: requires BLS_API_KEY in .env (25/day free, 500/day with key)."
+        agent_hint: "Fetch BLS labor/economic data by series ID. Returns a table with series_id, name, date, value. Common IDs: CUUR0000SA0 (CPI-U), LNS14000000 (Unemployment), CES0000000001 (Employment), CES0500000003 (Avg Hourly Earnings), WPSFD4 (PPI). Pass --series_ids as comma-separated list. Registered: 500 queries/day, 50 series/query, 20 years. Unregistered: 25 queries/day. Uses BLS_API_KEY from .env if available."
         param_options: {}
     }
     bls_presets: {
         category: "bls"
         color: "#0891b2"
         wirable: []
-        agent_hint: "Fetch popular BLS preset series: CPI-U, Unemployment Rate, Total Employment, Avg Hourly Earnings, PPI. Returns a table with series_id, name, date, value. Uses BLS_API_KEY from .env if available (required for multi-series)."
+        agent_hint: "Fetch popular BLS preset series: CPI-U, Unemployment Rate, Total Employment, Avg Hourly Earnings, PPI. Returns a table with series_id, name, date, value. Uses BLS_API_KEY from .env (500 queries/day registered, 25/day unregistered)."
         param_options: {}
     }
 }
@@ -67,7 +67,7 @@ export def "prim-bls-series" [
             series_id: $ids,
             start_year: $start,
             end_year:   $end,
-            apiKey: $key
+            api_key: $key
         }
         let raw = (http post
             -H {Content-Type: "application/json"}
