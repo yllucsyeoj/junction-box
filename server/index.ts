@@ -327,7 +327,7 @@ app.get('/patterns', (c) => c.json({
       description: 'GET data, filter rows, sort by column',
       nodes: [
         { id: 'fetch', type: 'fetch', params: { url: 'https://jsonplaceholder.typicode.com/users' } },
-        { id: 'filter', type: 'filter', params: { column: 'address.city', op: 'contains', value: 'G' } },
+        { id: 'filter', type: 'filter', params: { column: 'name', op: 'contains', value: 'a' } },
         { id: 'sort', type: 'sort', params: { column: 'name', direction: 'asc' } },
         { id: 'return', type: 'return', params: {} },
       ],
