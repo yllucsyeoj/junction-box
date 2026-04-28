@@ -17,7 +17,7 @@ export const PRIMITIVE_META = {
     list_timezone: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "List available timezone names", param_options: {}}
     into_filesize: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 5MB into a filesize value", param_options: {}}
     into_duration: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 1hr 30min into a duration value", param_options: {}}
-    filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value (plain string — no NUON quoting needed)"
+    filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value (plain string — no NUON quoting needed). Column must be a top-level name — dotted paths like address.city are not supported."
                    param_options: {op: ["==", "!=", ">", "<", "contains"]}}
     map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
     select:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Keep only the named columns from a table (comma- or space-separated, e.g. \"name,email,phone\")", param_options: {}}

@@ -180,6 +180,10 @@ app.get('/', (c) => c.json({
       issue: 'select/reject columns: use comma-separated',
       solution: 'columns: "name,email,phone" or "name email phone" — both work. Comma is the canonical form.',
     },
+    {
+      issue: 'filter, sort, select do not support nested field paths',
+      solution: 'Columns must be top-level names. To filter on address.city, first use "get" to extract the nested record, then filter on top-level keys. Or use row_apply to promote nested fields.',
+    },
   ],
 
   // ── Value Formats ─────────────────────────────────────────────────────────
