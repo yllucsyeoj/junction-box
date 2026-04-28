@@ -103,7 +103,7 @@ export const PRIMITIVE_META = {
                    param_options: {target: ["int", "float", "string", "bool"]}}
     math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg/sqrt/median/stddev on a list or table column"
                    param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg", "sqrt", "median", "stddev"]}}
-    each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list. Use $in for the current element. e.g. $in * 2", param_options: {}}
+    each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list or table row. Use $in for the element/row. e.g. $in * 2 (list) or $in.score * 2 (table).", param_options: {}}
     str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable. Param values are plain strings — whitespace is preserved.", param_options: {}}
     str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
     url_encode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Percent-encode a string for safe use in a URL", param_options: {}}
@@ -715,8 +715,8 @@ export def "prim-if" [
 
 # Apply a Nu expression to every element of a list ($in = current element)
 export def "prim-each" [
-    --expr: string = "$in"           # Nu expression — use $in for the current element (e.g. $in * 2)
-]: list -> list {
+    --expr: string = "$in"           # Nu expression — use $in for the current element (e.g. $in * 2). For table rows, use $in.fieldname.
+]: any -> list {
     $in | each {|it|
         nu -c $"(($it | to nuon)) | do { ($expr) } | to nuon"
         | from nuon
