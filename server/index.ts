@@ -78,7 +78,7 @@ app.get('/', (c) => c.json({
     step_1: { action: 'GET /catalog', purpose: `Browse all ${nodeSpec.length} node types by name, category, and hint — token-efficient (~15KB). Filter with ?category=transform` },
     step_2: { action: 'GET /defs/:type', purpose: 'Get full schema + example for a specific node type' },
     step_3: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
-    step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=none for minimal response.' },
+    step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=full to include intermediate node outputs (debugging).' },
     step_5: { action: 'POST /patch to save', purpose: 'Store a working graph for reuse' },
   },
 
@@ -133,11 +133,11 @@ app.get('/', (c) => c.json({
     'GET /health': 'Server status, uptime, primitive count',
     'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~15KB). Supports ?category= filter. Start here.`,
     'GET /catalog?category=X': 'Filter catalog by category: input, transform, compute, datetime, logic, output, file, external',
-    'GET /defs': `All ${nodeSpec.length} node types with full schemas, params, ports, examples`,
+    'GET /defs': `All ${nodeSpec.length} node types — WARNING: ~112KB. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
     'GET /nodes': 'Raw node spec (no examples)',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. ?outputs=none omits intermediate node outputs for minimal response.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Default: no intermediate outputs. Add ?outputs=full to include per-node outputs for debugging.',
     'POST /patch': 'Save a validated graph: {alias, description, graph}',
     'GET /patches': 'List saved patches',
     'GET /patch/:alias': 'Get a saved patch',
@@ -492,7 +492,7 @@ app.get('/patterns', (c) => c.json({
 // ---------------------------------------------------------------------------
 app.post('/exec', async (c) => {
   const contentType = c.req.header('content-type') ?? ''
-  const outputsMode = c.req.query('outputs') ?? 'full'  // 'full' (default) | 'none'
+  const outputsMode = c.req.query('outputs') ?? 'none'  // 'none' (default) | 'full'
   const run_id = makeRunId()
   const t0 = Date.now()
 
