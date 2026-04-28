@@ -117,14 +117,30 @@ app.get('/', (c) => c.json({
 
   // ── Node Categories ────────────────────────────────────────────────────────
   categories: {
-    input: { description: 'Produce data: const (fixed value), fetch (HTTP GET), env, file-in', color: '#f97316' },
+    // Core processing
+    input:     { description: 'Produce data: const (fixed value), fetch (HTTP GET, URL wirable), env, file-in', color: '#f97316' },
     transform: { description: 'Filter rows, sort, select columns, extract fields, map, reduce, join tables, group, window', color: '#3b82f6' },
-    compute: { description: 'Math, string ops, type conversion, encoding/decoding, hashing, each (list transform)', color: '#eab308' },
-    datetime: { description: 'Current time, format dates, parse dates, timezone conversion', color: '#06b6d4' },
-    logic: { description: 'Conditionals (if), loops (for/while), error handling (try/catch), pattern matching', color: '#ec4899' },
-    output: { description: 'Return (pipeline result), display (debug), to-json/csv/text (serialize)', color: '#22c55e' },
-    file: { description: 'ls, glob, mkdir, rm, path-join, path-parse', color: '#f97316' },
-    external: { description: 'HTTP POST/PUT/DELETE/PATCH, LLM calls, analyze', color: '#a855f7' },
+    compute:   { description: 'Math, string ops, type conversion, encoding/decoding, hashing, each (list transform)', color: '#eab308' },
+    datetime:  { description: 'Current time, format dates, parse dates, timezone conversion', color: '#06b6d4' },
+    logic:     { description: 'Conditionals (if), loops (for/while), error handling (try/catch), pattern matching', color: '#ec4899' },
+    output:    { description: 'Return (pipeline result), display (debug), to-json/csv/text (serialize)', color: '#22c55e' },
+    file:      { description: 'ls, glob, mkdir, rm, path-join, path-parse', color: '#f97316' },
+    external:  { description: 'HTTP POST/PUT/DELETE/PATCH, LLM calls, analyze', color: '#a855f7' },
+    // Data sources — use GET /catalog?category=<name> to browse each group
+    hn:        { description: 'Hacker News: hn-search (stories, query required), hn-comments (comment text, query required)', color: '#f97316' },
+    reddit:    { description: 'Reddit: reddit-subreddit, reddit-search (query required), reddit-comments', color: '#ff4500' },
+    wikipedia: { description: 'Wikipedia: wiki-search (query required), wiki-summary, wiki-sections, wiki-section, wiki-table', color: '#6b7280' },
+    youtube:   { description: 'YouTube: youtube-search, youtube-video, youtube-channel, youtube-playlist, youtube-transcript', color: '#ff0000' },
+    github:    { description: 'GitHub: github-repo, github-commits, github-contributors', color: '#24292e' },
+    rss:       { description: 'RSS: rss-feed — fetch any RSS/Atom feed as a table', color: '#f97316' },
+    web:       { description: 'Web: web-htmd — fetch a URL and convert HTML to Markdown', color: '#3b82f6' },
+    market:    { description: 'Market data: market-snapshot, market-history, market-screener, market-options, market-symbols', color: '#22c55e' },
+    coingecko: { description: 'Crypto: coingecko-simple (prices), coingecko-markets, coingecko-global', color: '#8dc647' },
+    feargreed: { description: 'Sentiment: fear-greed-now, fear-greed-history', color: '#ec4899' },
+    sec:       { description: 'SEC filings: sec-10k, sec-10q, sec-8k, sec-earnings, sec-filing, sec-insider, sec-proxy', color: '#003087' },
+    fred:      { description: 'FRED economic data: fred-series (time series), fred-search', color: '#1a4480' },
+    bls:       { description: 'Bureau of Labor Statistics: bls-series, bls-presets', color: '#1a4480' },
+    template:  { description: 'Example/template nodes — reference for building custom data source nodes', color: '#f59e0b' },
   },
 
   // ── API Endpoints ─────────────────────────────────────────────────────────
@@ -132,7 +148,7 @@ app.get('/', (c) => c.json({
     'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
     'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~15KB). Supports ?category= filter. Start here.`,
-    'GET /catalog?category=X': 'Filter catalog by category: input, transform, compute, datetime, logic, output, file, external',
+    'GET /catalog?category=X': 'Filter catalog by category. Core: input, transform, compute, datetime, logic, output, file, external. Data sources: hn, reddit, wikipedia, youtube, github, rss, web, market, coingecko, feargreed, sec, fred, bls, template.',
     'GET /defs': `All ${nodeSpec.length} node types — WARNING: ~112KB. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
@@ -161,8 +177,8 @@ app.get('/', (c) => c.json({
       solution: 'Use "first" (returns a 1-row table by default) then "get fieldname" to extract a column as a list. To get a single record, use "row" with index 0.',
     },
     {
-      issue: 'Disconnected nodes still execute (with null input)',
-      solution: 'Always wire every node. Unconnected nodes run but get null input and error silently.',
+      issue: 'position field in nodes is optional — omit it',
+      solution: 'Examples in /defs show position: {x, y} on every node, but position is ignored during execution. Omit it to save tokens.',
     },
     {
       issue: 'return node without incoming edge runs immediately with null',
@@ -231,6 +247,7 @@ app.get('/catalog', (c) => {
       input_type: s.input_type,
       output_type: s.output_type,
       agent_hint: s.agent_hint,
+      has_wirable_params: s.params.some(p => p.wirable),
     }))
   return c.json(catalog)
 })
@@ -533,6 +550,16 @@ app.post('/exec', async (c) => {
     graph = parsed.graph
   }
 
+  // Ensure graph has the expected shape before passing to validator
+  if (!graph || typeof graph !== 'object' || !Array.isArray((graph as any).nodes)) {
+    logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'bad_graph_shape', duration_ms: Date.now() - t0 })
+    return c.json({
+      status: 'error', run_id,
+      fatal: 'Request body must be a graph object: {nodes: [...], edges: [...]}.',
+      validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
+    }, 400)
+  }
+
   // Pre-execution validation
   const validationErrors = validateGraph(graph as any, nodeSpec)
   if (validationErrors.length > 0) {
@@ -646,23 +673,25 @@ app.post('/patch', async (c) => {
     return c.json({ error: 'Graph validation failed — patch not stored.', validation_errors: validationErrors }, 422)
   }
 
+  const patchPath = resolve(PATCHES_DIR, `${alias}.json`)
+  const updated = existsSync(patchPath)
   const record = { alias, description: description.trim(), graph, created_at: new Date().toISOString() }
   try {
     mkdirSync(PATCHES_DIR, { recursive: true })
-    writeFileSync(resolve(PATCHES_DIR, `${alias}.json`), JSON.stringify(record, null, 2))
+    writeFileSync(patchPath, JSON.stringify(record, null, 2))
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     return c.json({ error: 'Failed to save patch to disk.', detail }, 500)
   }
   logRun({ type: 'patch_save', alias })
-  return c.json({ ok: true, alias, validated: true })
+  return c.json({ ok: true, alias, validated: true, updated })
 })
 
 app.get('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
   const filePath = resolve(PATCHES_DIR, `${alias}.json`)
   if (!existsSync(filePath)) {
-    return c.json({ error: `Patch "${alias}" not found.` }, 404)
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
   }
   return c.json(JSON.parse(readFileSync(filePath, 'utf8')))
 })
@@ -671,7 +700,7 @@ app.delete('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
   const filePath = resolve(PATCHES_DIR, `${alias}.json`)
   if (!existsSync(filePath)) {
-    return c.json({ error: `Patch "${alias}" not found.` }, 404)
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
   }
   unlinkSync(filePath)
   logRun({ type: 'patch_delete', alias })
@@ -728,7 +757,16 @@ app.get('/logs', (c) => {
 // POST /parse-nuon — convert NUON to JSON (used by frontend drag-to-load)
 // ---------------------------------------------------------------------------
 app.post('/parse-nuon', async (c) => {
-  const nuonText = await c.req.text()
+  // Accept both raw NUON text (Content-Type: text/plain) and
+  // JSON body with a "text" field (Content-Type: application/json, body: {text: "..."})
+  const contentType = c.req.header('content-type') ?? ''
+  let nuonText: string
+  if (contentType.includes('application/json')) {
+    const body = await c.req.json()
+    nuonText = typeof body?.text === 'string' ? body.text : JSON.stringify(body)
+  } else {
+    nuonText = await c.req.text()
+  }
   const parsed = nuonToGraph(nuonText)
   if (!parsed.ok) {
     return c.json({ error: 'Invalid NUON', detail: parsed.error }, 400)

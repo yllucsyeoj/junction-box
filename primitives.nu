@@ -4,7 +4,7 @@
 # Metadata used by scripts/introspect.nu for canvas display and agent use.
 # Keys match the short name (strip "prim-", replace "-" with "_").
 export const PRIMITIVE_META = {
-    fetch:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Fetch JSON/table data from a URL via HTTP GET", param_options: {}, required_params: ["url"]}
+    fetch:         {category: "input",     color: "#f97316", wirable: ["url"],           agent_hint: "Fetch JSON/table data from a URL via HTTP GET. --url is wirable — wire a string output to set it dynamically.", param_options: {}}
     const:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_options: {}}
     env:           {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
     file_in:       {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
@@ -127,14 +127,16 @@ export const PRIMITIVE_META = {
 
 # Fetch data from a URL via HTTP GET
 export def "prim-fetch" [
-    --url: string                # URL to fetch
+    --url: string                # URL to fetch (wirable — wire a string output to set dynamically)
     --headers: string = "{}"     # Headers as NUON record string
 ]: nothing -> any {
+    # Wired params arrive as JSON-encoded strings; static params arrive as plain strings.
+    let url_val = if ($url | str starts-with '"') { try { $url | from json } catch { $url } } else { $url }
     let h = ($headers | from nuon)
     if ($h | is-empty) {
-        http get $url
+        http get $url_val
     } else {
-        http get $url --headers $h
+        http get $url_val --headers $h
     }
 }
 
@@ -718,8 +720,11 @@ export def "prim-each" [
     --expr: string = "$in"           # Nu expression — use $in for the current element (e.g. $in * 2). For table rows, use $in.fieldname.
 ]: any -> list {
     $in | each {|it|
-        nu -c $"(($it | to nuon)) | do { ($expr) } | to nuon"
-        | from nuon
+        let res = (nu -c $"(($it | to nuon)) | do { ($expr) } | to nuon" | complete)
+        if $res.exit_code != 0 {
+            error make {msg: $"each expression failed: ($res.stderr | str trim)"}
+        }
+        $res.stdout | from nuon
     }
 }
 

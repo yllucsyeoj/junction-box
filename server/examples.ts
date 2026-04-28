@@ -329,4 +329,16 @@ export const EXAMPLES: Record<string, MiniGraph> = {
   date_add: linear('const', { value: '2024-01-15T00:00:00+00:00' }, 'date-add', { amount: '7day' }),
 
   if: linear('const', { value: '42' }, 'if', { column: '', op: '>', value: '10', fallback: '0' }),
+
+  for: {
+    nodes: [
+      { id: 'src', type: 'const', position: { x: 0, y: 0 }, params: { value: '[1, 2, 3, 4, 5]' } },
+      { id: 'op', type: 'for', position: { x: 200, y: 0 }, params: { over: '$in', init: '0', expr: '$in.acc + $in.elem' } },
+      { id: 'out', type: 'return', position: { x: 400, y: 0 }, params: {} },
+    ],
+    edges: [
+      { id: 'e1', from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
+      { id: 'e2', from: 'op', from_port: 'output', to: 'out', to_port: 'input' },
+    ],
+  },
 }

@@ -41,3 +41,17 @@ Concrete, prioritized changes. For each:
 ## Framing
 
 Think about this question throughout: **if you had to give another agent a single paragraph to orient them to this API before they used it, what would it say — and what gaps would it leave?** The gaps are what to fix.
+
+---
+
+## Orientation (post-assessment, updated)
+
+Junction Box is a node-graph execution engine. Define a pipeline as `{nodes, edges}` and POST to `/exec` — it runs synchronously and returns `{status, result, errors}`. Start with `GET /` (a comprehensive LLM-oriented manifest), then `GET /catalog` (~7K tokens, 141 nodes) for discovery — it shows `name`, `category`, `input_type`, `output_type`, `agent_hint`, and `has_wirable_params` per node. Call `GET /defs/:type` for full param details before wiring. Key rules: source nodes (`const`, `fetch`, `hn-search`, etc.) have no input edge; every other node needs one; `return` or the last node yields `result`. Add `?outputs=full` to see per-node outputs for debugging. Save working pipelines with `POST /patch`.
+
+**Critical things to know:**
+- **22 node categories** — beyond the 8 core categories (input/transform/compute/etc.), there are 14 data-source categories: `hn`, `reddit`, `wikipedia`, `youtube`, `github`, `rss`, `web`, `market`, `coingecko`, `feargreed`, `sec`, `fred`, `bls`, `template`. Use `GET /catalog?category=hn` (etc.) to browse each.
+- **`fetch.url` is wirable** — wire a string output to the `url` port to construct URLs dynamically.
+- **Search node `query` params are required** — `hn-search`, `hn-comments`, `reddit-search`, `wiki-search` all require `--query`; omitting it fails at validation (422), not silently at runtime.
+- **Validation (422) vs runtime (500)** — structural errors (bad params, wrong types, disconnected nodes) are caught pre-run with actionable messages. Network failures and expression errors are 500s at runtime.
+- **`POST /parse-nuon`** accepts either raw NUON text (`Content-Type: text/plain`) or JSON `{"text": "..."}` (`Content-Type: application/json`) and returns the parsed JSON value.
+- **`position` fields in nodes are ignored** — omit them to save tokens.

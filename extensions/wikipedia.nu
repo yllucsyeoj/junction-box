@@ -7,6 +7,7 @@ export const WIKIPEDIA_PRIMITIVE_META = {
         category: "wikipedia"
         color: "#6b7280"
         wirable: []
+        required_params: ["query"]
         agent_hint: "Search Wikipedia for articles matching a query. Returns a table with title, snippet, pageid. Use to find the exact page title before calling wiki_summary or wiki_sections."
         param_options: {}
     }

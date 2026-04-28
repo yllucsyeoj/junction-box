@@ -17,6 +17,7 @@ export const REDDIT_PRIMITIVE_META = {
         category: "reddit"
         color: "#ff4500"
         wirable: []
+        required_params: ["query"]
         agent_hint: "Search posts on Reddit within a subreddit or site-wide (subreddit='all'). Returns a table with id, title, author, score, num_comments, url, permalink, selftext, created_utc, flair."
         param_options: {
             sort: ["relevance", "top", "new"]
