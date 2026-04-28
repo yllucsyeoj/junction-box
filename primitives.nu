@@ -117,7 +117,7 @@ export const PRIMITIVE_META = {
     row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row. IMPORTANT: when using --as_col, the expression must return a scalar (string/number/bool) — returning the whole row record creates a nested column that breaks downstream filter comparisons.", param_options: {}}
     date_format:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Format a datetime as a string using a strftime pattern (default: %Y-%m-%d %H:%M:%S)", param_options: {}}
     into_datetime: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Parse a string into a datetime value — optionally provide a --fmt strftime pattern", param_options: {}}
-    if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: pass input through if condition is true, else return --fallback NUON value"
+    if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: passes input through unchanged when condition is true; returns --fallback NUON value when false. There is no 'then' expression — to transform the true-branch value, add a downstream node."
                    param_options: {op: ["==", "!=", ">", "<", "is-empty", "is-not-empty"]}}
     # NOTE: conditional routing (if/else branching to different downstream nodes) is a
     # known gap — deferred. Requires graph-level routing, not a single primitive.
