@@ -104,7 +104,7 @@ export const PRIMITIVE_META = {
     math_fn:       {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a math function: round/floor/ceil/abs on a number, or sum/min/max/avg/sqrt/median/stddev on a list or table column"
                    param_options: {op: ["round", "floor", "ceil", "abs", "sum", "min", "max", "avg", "sqrt", "median", "stddev"]}}
     each:          {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to every element of a list. Use $in for the current element. e.g. $in * 2", param_options: {}}
-    str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable. Param values are plain strings — do NOT use NUON quoting (set prefix to label= not \\\"label=\\\").", param_options: {}}
+    str_concat:    {category: "compute",   color: "#eab308", wirable: ["prefix", "suffix"], agent_hint: "Concatenate strings: prepend --prefix and/or append --suffix. Both ports are wirable. Param values are plain strings — whitespace is preserved.", param_options: {}}
     str_interp:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Template string interpolation — input must be a record; use {field} placeholders in --template", param_options: {}}
     url_encode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Percent-encode a string for safe use in a URL", param_options: {}}
     url_decode:    {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Decode a percent-encoded URL string", param_options: {}}
@@ -730,18 +730,10 @@ export def "prim-str-concat" [
     --prefix: string = ""            # String to prepend (or wire an edge to this port)
     --suffix: string = ""            # String to append  (or wire an edge to this port)
 ]: string -> string {
-    let prefix_val = if (($prefix | from json | describe) | str starts-with 'list') {
-        (($prefix | from json) | str join)
-    } else {
-        let p = ($prefix | from json)
-        if ($p | describe | str starts-with 'string') { $p } else { $prefix }
-    }
-    let suffix_val = if (($suffix | from json | describe) | str starts-with 'list') {
-        (($suffix | from json) | str join)
-    } else {
-        let s = ($suffix | from json)
-        if ($s | describe | str starts-with 'string') { $s } else { $suffix }
-    }
+    # Params arrive as raw strings for static values, or JSON-encoded strings for wired inputs.
+    # Try JSON parsing first (handles wired case); fall back to the raw string (handles static case).
+    let prefix_val = try { $prefix | from json } catch { $prefix }
+    let suffix_val = try { $suffix | from json } catch { $suffix }
     $"($prefix_val)($in)($suffix_val)"
 }
 
