@@ -731,9 +731,10 @@ export def "prim-str-concat" [
     --suffix: string = ""            # String to append  (or wire an edge to this port)
 ]: string -> string {
     # Params arrive as raw strings for static values, or JSON-encoded strings for wired inputs.
-    # Try JSON parsing first (handles wired case); fall back to the raw string (handles static case).
-    let prefix_val = try { $prefix | from json } catch { $prefix }
-    let suffix_val = try { $suffix | from json } catch { $suffix }
+    # Wired values are always JSON-encoded (start with '"', '[', or '{').
+    # Static values are plain strings — pass them through unchanged to preserve whitespace.
+    let prefix_val = if ($prefix | str starts-with '"') { try { $prefix | from json } catch { $prefix } } else { $prefix }
+    let suffix_val = if ($suffix | str starts-with '"') { try { $suffix | from json } catch { $suffix } } else { $suffix }
     $"($prefix_val)($in)($suffix_val)"
 }
 
