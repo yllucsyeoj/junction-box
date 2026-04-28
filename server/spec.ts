@@ -46,6 +46,7 @@ let specs = ($cmds | each {|cmd|
 
     let param_opts = ($m | get -o param_options | default {})
     let wirable_list = ($m | get -o wirable | default [])
+    let required_list = ($m | get -o required_params | default [])
 
     let sig_rows = ($cmd.signatures | transpose key val | first | get val)
     let in_type = ($sig_rows | where parameter_type == 'input' | first | get syntax_shape | default 'any')
@@ -59,7 +60,7 @@ let specs = ($cmds | each {|cmd|
             let base = {
                 name: $p.parameter_name
                 type: ($p.syntax_shape | default 'string')
-                required: (not $p.is_optional)
+                required: ((not $p.is_optional) or ($required_list | any {|r| $r == $p.parameter_name}))
                 wirable: ($wirable_list | any {|w| $w == $p.parameter_name})
                 description: ($p.description | default '')
             }
