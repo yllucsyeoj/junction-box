@@ -575,9 +575,15 @@ app.post('/exec', async (c) => {
       try { partialOutputs[k] = JSON.parse(v) } catch { partialOutputs[k] = v }
     }
     logRun({ type: 'exec', run_id, alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 }, nodeRecords)
-    const errResp: Record<string, unknown> = { status: 'error', run_id, errors, fatal: fatalError, validation_errors: [] }
-    if (outputsMode !== 'none') { errResp.skipped = skipped; errResp.outputs = partialOutputs }
-    errResp.result = null
+    const errResp: Record<string, unknown> = {
+      status: 'error', run_id,
+      validation_errors: [],
+      errors,
+      fatal: fatalError,
+      skipped: outputsMode !== 'none' ? skipped : [],
+      outputs: outputsMode !== 'none' ? partialOutputs : {},
+      result: null,
+    }
     return c.json(errResp, 500)
   }
 
@@ -598,9 +604,15 @@ app.post('/exec', async (c) => {
   })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
-  const resp: Record<string, unknown> = { status: 'complete', run_id, validation_errors: [], errors: {} }
-  if (outputsMode !== 'none') { resp.skipped = skipped; resp.outputs = decodedOutputs }
-  resp.result = result
+  const resp: Record<string, unknown> = {
+    status: 'complete', run_id,
+    validation_errors: [],
+    errors: {},
+    fatal: null,
+    skipped: outputsMode !== 'none' ? skipped : [],
+    outputs: outputsMode !== 'none' ? decodedOutputs : {},
+    result,
+  }
   return c.json(resp)
 })
 
