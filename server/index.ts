@@ -496,7 +496,16 @@ app.post('/exec', async (c) => {
   let alias: string | null = null
 
   if (contentType.includes('application/json')) {
-    const body = await c.req.json()
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'json_parse_error', duration_ms: Date.now() - t0 })
+      return c.json({
+        status: 'error', run_id, fatal: 'Request body is not valid JSON.',
+        validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
+      }, 400)
+    }
     // Support alias shorthand: {"alias": "my-patch"}
     if (body && typeof body === 'object' && 'alias' in body) {
       alias = String(body.alias)
