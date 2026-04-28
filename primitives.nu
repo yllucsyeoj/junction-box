@@ -127,7 +127,7 @@ export const PRIMITIVE_META = {
 
 # Fetch data from a URL via HTTP GET
 export def "prim-fetch" [
-    --url: string = ""           # URL to fetch
+    --url: string                # URL to fetch
     --headers: string = "{}"     # Headers as NUON record string
 ]: nothing -> any {
     let h = ($headers | from nuon)
