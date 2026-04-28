@@ -51,7 +51,7 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value'
   message: string
   suggestion: string
 }
@@ -111,6 +111,23 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
             error_type: 'missing_param',
             message: `Required param "${p.name}" is not set and has no wired edge.`,
             suggestion: `Set "${p.name}" as a static param value, or wire an edge to that port.`,
+          })
+        }
+      }
+    }
+
+    // 4. Enum params: validate value is in allowed options
+    for (const p of spec.params) {
+      if (p.options && p.options.length > 0) {
+        const val = node.params[p.name]
+        const hasWiredEdge = graph.edges.some(e => e.to === node.id && e.to_port === p.name)
+        if (!hasWiredEdge && val !== undefined && val !== '' && !p.options.includes(String(val))) {
+          errors.push({
+            node_id: node.id,
+            type: node.type,
+            error_type: 'invalid_param_value',
+            message: `Param "${p.name}" on "${node.type}" has invalid value "${val}".`,
+            suggestion: `Valid values: ${p.options.map(o => `"${o}"`).join(', ')}.`,
           })
         }
       }

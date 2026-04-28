@@ -75,10 +75,11 @@ app.get('/', (c) => c.json({
 
   // ── Quick Start ──────────────────────────────────────────────────────────
   quick_start: {
-    step_1: { action: 'GET /defs', purpose: 'Learn all 131 available node types with examples' },
-    step_2: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
-    step_3: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back' },
-    step_4: { action: 'POST /patch to save', purpose: 'Store a working graph for reuse' },
+    step_1: { action: 'GET /catalog', purpose: `Browse all ${nodeSpec.length} node types by name, category, and hint — token-efficient (~15KB). Filter with ?category=transform` },
+    step_2: { action: 'GET /defs/:type', purpose: 'Get full schema + example for a specific node type' },
+    step_3: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
+    step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=none for minimal response.' },
+    step_5: { action: 'POST /patch to save', purpose: 'Store a working graph for reuse' },
   },
 
   // ── Core Concept ─────────────────────────────────────────────────────────
@@ -130,12 +131,14 @@ app.get('/', (c) => c.json({
   endpoints: {
     'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
-    'GET /defs': 'All 131 node types with schemas, params, ports, examples — call this first',
-    'GET /defs/:type': 'Single node definition with example',
-    'GET /patterns': '10 pre-built common pipeline patterns ready to copy/use',
+    'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~15KB). Supports ?category= filter. Start here.`,
+    'GET /catalog?category=X': 'Filter catalog by category: input, transform, compute, datetime, logic, output, file, external',
+    'GET /defs': `All ${nodeSpec.length} node types with full schemas, params, ports, examples`,
+    'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
+    'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
     'GET /nodes': 'Raw node spec (no examples)',
-    'POST /exec': 'Run a pipeline → {status, result, outputs, errors}',
-    'POST /patch': 'Save a graph: {alias, description, graph}',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. ?outputs=none omits intermediate node outputs for minimal response.',
+    'POST /patch': 'Save a validated graph: {alias, description, graph}',
     'GET /patches': 'List saved patches',
     'GET /patch/:alias': 'Get a saved patch',
     'DELETE /patch/:alias': 'Delete a patch',
@@ -151,7 +154,7 @@ app.get('/', (c) => c.json({
     },
     {
       issue: 'Column names are exact-match, case-sensitive',
-      solution: 'Market/screener outputs use snake_case (market_cap, not marketCap). Inspect output first.',
+      solution: 'Inspect output first (look at the outputs{} of a fetch node run). Use GET /catalog to check node input/output types before connecting.',
     },
     {
       issue: 'get on a list/table by index does NOT work',
@@ -166,12 +169,16 @@ app.get('/', (c) => c.json({
       solution: 'Wire return last, after all processing nodes.',
     },
     {
-      issue: 'NUON vs JSON for values',
-      solution: 'Use NUON: [[name age]; [Alice 30]] not JSON: [["name","age"],["Alice",30]]. Tables use spaces, not commas.',
+      issue: 'NUON vs JSON for table constants',
+      solution: 'Table syntax: [[col1 col2]; [val1 val2]]. List: [1, 2, 3]. Record: {key: "val"}. Use double quotes inside NUON.',
     },
     {
-      issue: 'str-interp requires record input',
-      solution: 'Input must be a record like {name: "Alice"}. Template uses {field} placeholders.',
+      issue: 'filter.value is always a plain string',
+      solution: 'Pass "G" not "\"G\"". For numeric comparisons (>, <) pass the number as a string: "50" not 50.',
+    },
+    {
+      issue: 'select/reject columns: use comma-separated',
+      solution: 'columns: "name,email,phone" or "name email phone" — both work. Comma is the canonical form.',
     },
   ],
 
@@ -200,6 +207,29 @@ app.get('/health', (c) => c.json({
 // GET /nodes — full node spec (what primitives exist, their ports + params)
 // ---------------------------------------------------------------------------
 app.get('/nodes', (c) => c.json(nodeSpec))
+
+// ---------------------------------------------------------------------------
+// GET /catalog — token-efficient node index for agent discovery
+//
+// Returns only {name, category, input_type, output_type, agent_hint} per node.
+// ~15KB vs 111KB for /defs. Use this first to find relevant node types,
+// then call GET /defs/:type for the full schema of nodes you want to use.
+//
+// Optional: ?category=transform (or input, compute, datetime, logic, output, file, external)
+// ---------------------------------------------------------------------------
+app.get('/catalog', (c) => {
+  const categoryFilter = c.req.query('category')
+  const catalog = nodeSpec
+    .filter(s => !categoryFilter || s.category === categoryFilter)
+    .map(s => ({
+      name: s.name,
+      category: s.category,
+      input_type: s.input_type,
+      output_type: s.output_type,
+      agent_hint: s.agent_hint,
+    }))
+  return c.json(catalog)
+})
 
 // ---------------------------------------------------------------------------
 // POST /run — SSE stream for the frontend canvas ONLY
@@ -297,7 +327,7 @@ app.get('/patterns', (c) => c.json({
       description: 'GET data, filter rows, sort by column',
       nodes: [
         { id: 'fetch', type: 'fetch', params: { url: 'https://jsonplaceholder.typicode.com/users' } },
-        { id: 'filter', type: 'filter', params: { column: 'address.city', op: 'contains', value: '"G"' } },
+        { id: 'filter', type: 'filter', params: { column: 'address.city', op: 'contains', value: 'G' } },
         { id: 'sort', type: 'sort', params: { column: 'name', direction: 'asc' } },
         { id: 'return', type: 'return', params: {} },
       ],
@@ -383,7 +413,7 @@ app.get('/patterns', (c) => c.json({
       description: 'Select specific columns, rename one',
       nodes: [
         { id: 'data', type: 'const', params: { value: '[[name age city score]; [alice 30 NYC 95] [bob 25 LA 87] [carol 35 NYC 92]]' } },
-        { id: 'select', type: 'select', params: { columns: 'name score' } },
+        { id: 'select', type: 'select', params: { columns: 'name,score' } },
         { id: 'rename', type: 'rename', params: { from: 'score', to: 'grade' } },
         { id: 'return', type: 'return', params: {} },
       ],
@@ -458,6 +488,7 @@ app.get('/patterns', (c) => c.json({
 // ---------------------------------------------------------------------------
 app.post('/exec', async (c) => {
   const contentType = c.req.header('content-type') ?? ''
+  const outputsMode = c.req.query('outputs') ?? 'full'  // 'full' (default) | 'none'
   const run_id = makeRunId()
   const t0 = Date.now()
 
@@ -515,13 +546,13 @@ app.post('/exec', async (c) => {
     nodeRecords = await runPipeline(graph as any, (event: SSEEvent) => {
       if ('node_id' in event) {
         if (event.status === 'done') outputs[event.node_id] = event.output
-        if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type }
+        if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type, ...(event.expected_type ? { expected_type: event.expected_type } : {}), ...(event.got_type ? { got_type: event.got_type } : {}) }
         if (event.status === 'skipped') skipped.push(event.node_id)
       }
       if ('status' in event && event.status === 'fatal') {
         fatalError = (event as { status: 'fatal'; error: string }).error
       }
-    })
+    }, nodeSpec)
   } catch (err) {
     fatalError = err instanceof Error ? err.message : String(err)
   }
@@ -535,7 +566,10 @@ app.post('/exec', async (c) => {
       try { partialOutputs[k] = JSON.parse(v) } catch { partialOutputs[k] = v }
     }
     logRun({ type: 'exec', run_id, alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 }, nodeRecords)
-    return c.json({ status: 'error', run_id, errors, fatal: fatalError, validation_errors: [], skipped, outputs: partialOutputs, result: null }, 500)
+    const errResp: Record<string, unknown> = { status: 'error', run_id, errors, fatal: fatalError, validation_errors: [] }
+    if (outputsMode !== 'none') { errResp.skipped = skipped; errResp.outputs = partialOutputs }
+    errResp.result = null
+    return c.json(errResp, 500)
   }
 
   // Decode each node's JSON output string into a real value for the API response.
@@ -555,7 +589,10 @@ app.post('/exec', async (c) => {
   })()
 
   logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
-  return c.json({ status: 'complete', run_id, validation_errors: [], errors: {}, skipped, outputs: decodedOutputs, result })
+  const resp: Record<string, unknown> = { status: 'complete', run_id, validation_errors: [], errors: {} }
+  if (outputsMode !== 'none') { resp.skipped = skipped; resp.outputs = decodedOutputs }
+  resp.result = result
+  return c.json(resp)
 })
 
 // ---------------------------------------------------------------------------
@@ -585,9 +622,15 @@ app.post('/patch', async (c) => {
   }
 
   const record = { alias, description: description.trim(), graph, created_at: new Date().toISOString() }
-  writeFileSync(resolve(PATCHES_DIR, `${alias}.json`), JSON.stringify(record, null, 2))
+  try {
+    mkdirSync(PATCHES_DIR, { recursive: true })
+    writeFileSync(resolve(PATCHES_DIR, `${alias}.json`), JSON.stringify(record, null, 2))
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return c.json({ error: 'Failed to save patch to disk.', detail }, 500)
+  }
   logRun({ type: 'patch_save', alias })
-  return c.json({ ok: true, alias })
+  return c.json({ ok: true, alias, validated: true })
 })
 
 app.get('/patch/:alias', (c) => {

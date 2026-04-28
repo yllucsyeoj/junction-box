@@ -1,6 +1,7 @@
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { toposort } from './toposort'
+import type { NodeSpec } from './spec'
 
 const ROOT = resolve(import.meta.dir, '..')
 
@@ -19,7 +20,7 @@ interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
 export type SSEEvent =
   | { node_id: string; status: 'running' }
   | { node_id: string; status: 'done'; output: string }
-  | { node_id: string; status: 'error'; error: string; error_type: string }
+  | { node_id: string; status: 'error'; error: string; error_type: string; expected_type?: string; got_type?: string }
   | { node_id: string; status: 'skipped'; reason: string }
   | { status: 'complete' }
 
@@ -32,8 +33,21 @@ export interface NodeRunRecord {
   error_type?: string
 }
 
+// Extract actual type from Nu pipeline_mismatch error text.
+// Nu errors include lines like: "expected table<...>, found record"
+function extractGotType(raw: string): string | undefined {
+  const m = raw.match(/found\s+([\w<>, ]+?)(?:\s*[\n,.]|$)/i)
+  if (m) return m[1].trim().split('<')[0]  // normalize list<any> → list
+  return undefined
+}
+
 // Strip internal file/line references from Nu error output and return a clean message.
-function normalizeNuError(raw: string, nodeType: string, params: Record<string, unknown>): { message: string; error_type: string } {
+function normalizeNuError(
+  raw: string,
+  nodeType: string,
+  params: Record<string, unknown>,
+  expectedType?: string
+): { message: string; error_type: string; expected_type?: string; got_type?: string } {
   // Remove Nu source location lines like ",-[primitives.nu:209:5]" and surrounding context
   const stripped = raw
     .replace(/\s*,?-\[.*?:\d+:\d+\][\s\S]*?`----/g, '')   // strip source context blocks
@@ -66,13 +80,22 @@ function normalizeNuError(raw: string, nodeType: string, params: Record<string, 
   }
   const hint = paramHints.length > 0 ? ` (check param: ${paramHints.join(', ')})` : ''
 
-  return { message: (stripped || raw.trim()) + hint, error_type }
+  const got_type = (error_type === 'type_mismatch') ? extractGotType(raw) : undefined
+  const result: { message: string; error_type: string; expected_type?: string; got_type?: string } = {
+    message: (stripped || raw.trim()) + hint,
+    error_type,
+  }
+  if (expectedType && expectedType !== 'any') result.expected_type = expectedType
+  if (got_type) result.got_type = got_type
+  return result
 }
 
 export async function runPipeline(
   graph: Graph,
-  emit: (event: SSEEvent) => void
+  emit: (event: SSEEvent) => void,
+  specs: NodeSpec[] = []
 ): Promise<NodeRunRecord[]> {
+  const specMap = new Map(specs.map(s => [s.name, s]))
   // Validate and determine execution order
   const order = toposort(
     graph.nodes.map(n => n.id),
@@ -157,18 +180,21 @@ export async function runPipeline(
     const stdout = Buffer.from(proc.stdout).toString().trim()
     const stderr = Buffer.from(proc.stderr).toString().trim()
 
+    const nodeSpec = specMap.get(node.type)
+    const expectedType = nodeSpec?.input_type
+
     if (proc.exitCode !== 0) {
       // Parse/syntax error — Nu couldn't compile the script
-      const { message, error_type } = normalizeNuError(stderr, node.type, node.params)
-      emit({ node_id: nodeId, status: 'error', error: message, error_type })
+      const { message, error_type, expected_type, got_type } = normalizeNuError(stderr, node.type, node.params, expectedType)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
     } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
       // Runtime error caught by try/catch wrapper
       const raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
-      const { message, error_type } = normalizeNuError(raw, node.type, node.params)
-      emit({ node_id: nodeId, status: 'error', error: message, error_type })
+      const { message, error_type, expected_type, got_type } = normalizeNuError(raw, node.type, node.params, expectedType)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })

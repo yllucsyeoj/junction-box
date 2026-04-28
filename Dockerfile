@@ -35,7 +35,7 @@ RUN cd /app/server && /usr/local/bin/bun install --frozen-lockfile
 COPY server/ ./server/
 
 ENV GONUDE_DATA_DIR=/app/data
-RUN mkdir -p /app/data/patches
+RUN mkdir -p /app/data/patches && chown -R appuser:appuser /app/data
 
 EXPOSE 3001
 

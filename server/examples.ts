@@ -53,7 +53,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
 
   map: linear('const', { value: '[[name]; [alice] [bob]]' }, 'map', { column: 'active', value: 'true' }),
 
-  select: linear('const', { value: '[[a b c]; [1 2 3]]' }, 'select', { columns: 'a b' }),
+  select: linear('const', { value: '[[a b c]; [1 2 3]]' }, 'select', { columns: 'a,b' }),
 
   sort: linear('const', { value: '[[name score]; [alice 90] [bob 70] [carol 85]]' }, 'sort', { column: 'score', direction: 'desc' }),
 
@@ -81,7 +81,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     ],
   },
 
-  reject: linear('const', { value: '[[a b c]; [1 2 3]]' }, 'reject', { columns: 'b c' }),
+  reject: linear('const', { value: '[[a b c]; [1 2 3]]' }, 'reject', { columns: 'b,c' }),
 
   update: linear('const', { value: '{name: "alice", score: 0}' }, 'update', { field: 'score', value: '100' }),
 

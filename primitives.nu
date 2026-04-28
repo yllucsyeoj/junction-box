@@ -17,10 +17,10 @@ export const PRIMITIVE_META = {
     list_timezone: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "List available timezone names", param_options: {}}
     into_filesize: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 5MB into a filesize value", param_options: {}}
     into_duration: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 1hr 30min into a duration value", param_options: {}}
-    filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value"
+    filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value (plain string — no NUON quoting needed)"
                    param_options: {op: ["==", "!=", ">", "<", "contains"]}}
     map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
-    select:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Keep only the named columns from a table (space-separated)", param_options: {}}
+    select:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Keep only the named columns from a table (comma- or space-separated, e.g. \"name,email,phone\")", param_options: {}}
     sort:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Sort a table by a column. direction: asc or desc"
                    param_options: {direction: ["asc", "desc"]}}
     count:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Count the number of rows in a table", param_options: {}}
@@ -29,7 +29,7 @@ export const PRIMITIVE_META = {
     rename:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rename a column: provide old and new column name", param_options: {}}
     get:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a field from a record or an index from a list", param_options: {}}
     merge:         {category: "transform", color: "#3b82f6", wirable: ["with"],         agent_hint: "Merge a NUON record into the input record — overlapping keys overwritten. Wire a record to --with for multi-input.", param_options: {}}
-    reject:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Remove named columns from a table or record (space-separated)", param_options: {}}
+    reject:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Remove named columns from a table or record (comma- or space-separated)", param_options: {}}
     update:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Update a field in a record/table with a NUON value", param_options: {}}
     group_by:      {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Group table rows by a column — returns a record keyed by the column values", param_options: {}}
     reduce:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Reduce a list to a single value: sum, product, min, max, avg, or join"
@@ -47,7 +47,7 @@ export const PRIMITIVE_META = {
     insert_row:    {category: "transform", color: "#3b82f6", wirable: ["row"],          agent_hint: "Append a record as a new row to a table. Wire a record source to --row port.", param_options: {}}
     col_to_list:   {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract a single column from a table as a flat list.", param_options: {}}
     col_stats:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Compute count/sum/avg/min/max for a numeric column. Returns a record.", param_options: {}}
-    summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Multi-column aggregate: --cols 'a b' --ops 'avg sum'. Returns a record of col_op keys."
+    summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Multi-column aggregate: --cols 'price,volume' --ops 'avg,sum'. Returns a record of col_op keys."
                    param_options: {ops: ["avg", "sum", "min", "max", "count"]}}
     null_fill:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Fill null values in a table column with a NUON constant or forward-fill."
                    param_options: {op: ["const", "ffill"]}}
@@ -187,9 +187,9 @@ export def "prim-map" [
 
 # Keep only the specified columns
 export def "prim-select" [
-    --columns: string = ""       # Space-separated column names (e.g. "name age email")
+    --columns: string = ""       # Comma- or space-separated column names (e.g. "name,age,email")
 ]: table -> table {
-    select ...($columns | split row " " | where {|c| $c != ""})
+    select ...($columns | split row --regex '[,\s]+' | where {|c| $c != ""})
 }
 
 # Sort a table by a column
@@ -566,10 +566,10 @@ export def "prim-path-parse" [
 
 # Join path components into a full path
 export def "prim-path-join" [
-    --parts: string = ""            # Space-separated path components to join
+    --parts: string = ""            # Comma- or space-separated path components to join
 ]: string -> string {
     let base = $in
-    let components = ($parts | split row " " | where {|c| $c != ""})
+    let components = ($parts | split row --regex '[,\s]+' | where {|c| $c != ""})
     $base | path join ...$components
 }
 
@@ -589,9 +589,9 @@ export def "prim-merge" [
 
 # Remove named columns from a table or record
 export def "prim-reject" [
-    --columns: string = ""           # Space-separated column names to remove
+    --columns: string = ""           # Comma- or space-separated column names to remove
 ]: any -> any {
-    reject ...($columns | split row " " | where {|c| $c != ""})
+    reject ...($columns | split row --regex '[,\s]+' | where {|c| $c != ""})
 }
 
 # Update a field with a NUON value
@@ -894,14 +894,14 @@ export def "prim-col-stats" [
 }
 
 # Multi-column aggregate — returns a flat record with {col_op: value} keys
-# --cols and --ops are parallel space-separated lists (e.g. "price volume", "avg sum")
+# --cols and --ops are parallel comma- or space-separated lists (e.g. "price,volume", "avg,sum")
 export def "prim-summarize" [
-    --cols: string = ""              # Space-separated column names (e.g. "price volume")
-    --ops: string = ""               # Space-separated ops per column (avg sum min max count)
+    --cols: string = ""              # Comma- or space-separated column names (e.g. "price,volume")
+    --ops: string = ""               # Comma- or space-separated ops per column (avg,sum,min,max,count)
 ]: table -> record {
     let tbl = $in
-    let col_list = ($cols | split row " " | where {|c| $c != ""})
-    let op_list  = ($ops  | split row " " | where {|o| $o != ""})
+    let col_list = ($cols | split row --regex '[,\s]+' | where {|c| $c != ""})
+    let op_list  = ($ops  | split row --regex '[,\s]+' | where {|o| $o != ""})
     mut result = {}
     for i in 0..<($col_list | length) {
         let col = ($col_list | get $i)

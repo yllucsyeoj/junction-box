@@ -66,6 +66,7 @@ let specs = ($cmds | each {|cmd|
             if $opts != null { $base | insert options $opts } else { $base }
         })
 
+    let wirable_ports = ($params | where {|p| $p.wirable} | each {|p| {name: $p.name, type: $p.type, role: "param"}})
     {
         name: ($cmd.name | str replace 'prim-' '')
         category: $m.category
@@ -75,7 +76,7 @@ let specs = ($cmds | each {|cmd|
         output_type: $out_type
         description: ($cmd.description | default "")
         ports: {
-            inputs: [{name: "input", type: $in_type}]
+            inputs: ([{name: "input", type: $in_type}] | append $wirable_ports)
             outputs: [{name: "output", type: $out_type}]
         }
         params: $params
