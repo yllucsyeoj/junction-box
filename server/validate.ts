@@ -51,7 +51,7 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value' | 'unknown_param'
   message: string
   suggestion: string
 }
@@ -116,7 +116,21 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
       }
     }
 
-    // 4. Enum params: validate value is in allowed options
+    // 4. Unknown params — params in node.params that are not in spec.params
+    const knownParamNames = new Set(spec.params.map(p => p.name))
+    for (const paramName of Object.keys(node.params)) {
+      if (!knownParamNames.has(paramName)) {
+        errors.push({
+          node_id: node.id,
+          type: node.type,
+          error_type: 'unknown_param',
+          message: `Unknown param "${paramName}" on node "${node.id}" (${node.type}).`,
+          suggestion: `Valid params for "${node.type}": ${spec.params.map(p => p.name).join(', ') || 'none'}. Check GET /defs/${node.type}.`,
+        })
+      }
+    }
+
+    // 5. Enum params: validate value is in allowed options
     for (const p of spec.params) {
       if (p.options && p.options.length > 0) {
         const val = node.params[p.name]
