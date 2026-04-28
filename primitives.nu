@@ -24,8 +24,8 @@ export const PRIMITIVE_META = {
     sort:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Sort a table by a column. direction: asc or desc"
                    param_options: {direction: ["asc", "desc"]}}
     count:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Count the number of rows in a table", param_options: {}}
-    first:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the first N rows of a table", param_options: {}}
-    last:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the last N rows of a table", param_options: {}}
+    first:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the first N rows of a table (default N=1). Returns a table — use 'get' to extract a field from the result.", param_options: {}}
+    last:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the last N rows of a table (default N=1).", param_options: {}}
     rename:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rename a column: provide old and new column name", param_options: {}}
     get:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a field from a record or an index from a list", param_options: {}}
     merge:         {category: "transform", color: "#3b82f6", wirable: ["with"],         agent_hint: "Merge a NUON record into the input record — overlapping keys overwritten. Wire a record to --with for multi-input.", param_options: {}}
@@ -457,14 +457,14 @@ export def "prim-count" []: table -> int {
 
 # Return the first N rows of a table
 export def "prim-first" [
-    --n: string = "10"             # Number of rows to return
+    --n: string = "1"              # Number of rows to return (default: 1)
 ]: table -> table {
     $in | first ($n | into int)
 }
 
 # Return the last N rows of a table
 export def "prim-last" [
-    --n: string = "10"             # Number of rows to return
+    --n: string = "1"              # Number of rows to return (default: 1)
 ]: table -> table {
     $in | last ($n | into int)
 }

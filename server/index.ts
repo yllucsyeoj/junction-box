@@ -158,7 +158,7 @@ app.get('/', (c) => c.json({
     },
     {
       issue: 'get on a list/table by index does NOT work',
-      solution: 'Use "first" to get row 0, then "get fieldname" to extract. get "0" looks for column named "0".',
+      solution: 'Use "first" (returns a 1-row table by default) then "get fieldname" to extract a column as a list. To get a single record, use "row" with index 0.',
     },
     {
       issue: 'Disconnected nodes still execute (with null input)',
