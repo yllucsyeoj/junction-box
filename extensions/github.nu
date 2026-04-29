@@ -6,21 +6,24 @@ export const GITHUB_PRIMITIVE_META = {
     github_repo: {
         category: "github"
         color: "#24292f"
-        wirable: []
+        wirable: ["owner", "repo"]
+        required_params: ["owner", "repo"]
         agent_hint: "Fetch metadata for a public GitHub repository. Returns a record with name, full_name, description, language, stars, forks, watchers, open_issues, topics, created_at, pushed_at, url."
         param_options: {}
     }
     github_contributors: {
         category: "github"
         color: "#24292f"
-        wirable: []
+        wirable: ["owner", "repo"]
+        required_params: ["owner", "repo"]
         agent_hint: "Fetch top contributors for a public GitHub repository. Returns a table with login, contributions, avatar_url. Note: repos with 10k+ commits return 0 contributions without auth."
         param_options: {}
     }
     github_commits: {
         category: "github"
         color: "#24292f"
-        wirable: []
+        wirable: ["owner", "repo"]
+        required_params: ["owner", "repo"]
         agent_hint: "Fetch recent commit history for a public GitHub repository. Returns a table with sha, author, message, date."
         param_options: {}
     }
@@ -35,7 +38,9 @@ export def "prim-github-repo" [
     --owner: string = "nus"   # Repository owner (user or org)
     --repo:  string = "nushell" # Repository name
 ]: nothing -> record {
-    let url = $"https://api.github.com/repos/($owner)/($repo)"
+    let owner_val = if ($owner | str starts-with '"') { try { $owner | from json } catch { $owner } } else { $owner }
+    let repo_val  = if ($repo  | str starts-with '"') { try { $repo  | from json } catch { $repo  } } else { $repo }
+    let url = $"https://api.github.com/repos/($owner_val)/($repo_val)"
     let raw = (http get -H {User-Agent: $GH_UA} -H {Accept: "application/vnd.github.v3+json"} $url)
     {
         name:            (try { $raw.name            } catch { "" })
@@ -59,7 +64,9 @@ export def "prim-github-contributors" [
     --repo:    string = "nushell" # Repository name
     --limit:   string = "10"     # Max contributors to return
 ]: nothing -> table {
-    let url  = $"https://api.github.com/repos/($owner)/($repo)/contributors?per_page=($limit | into int)"
+    let owner_val = if ($owner | str starts-with '"') { try { $owner | from json } catch { $owner } } else { $owner }
+    let repo_val  = if ($repo  | str starts-with '"') { try { $repo  | from json } catch { $repo  } } else { $repo }
+    let url  = $"https://api.github.com/repos/($owner_val)/($repo_val)/contributors?per_page=($limit | into int)"
     let raw  = (http get -H {User-Agent: $GH_UA} -H {Accept: "application/vnd.github.v3+json"} $url)
     $raw | each {|c|
         {
@@ -76,7 +83,9 @@ export def "prim-github-commits" [
     --repo:  string = "nushell" # Repository name
     --limit: string = "20"    # Max commits to return
 ]: nothing -> table {
-    let url = $"https://api.github.com/repos/($owner)/($repo)/commits?per_page=($limit | into int)"
+    let owner_val = if ($owner | str starts-with '"') { try { $owner | from json } catch { $owner } } else { $owner }
+    let repo_val  = if ($repo  | str starts-with '"') { try { $repo  | from json } catch { $repo  } } else { $repo }
+    let url = $"https://api.github.com/repos/($owner_val)/($repo_val)/commits?per_page=($limit | into int)"
     let raw = (http get -H {User-Agent: $GH_UA} -H {Accept: "application/vnd.github.v3+json"} $url)
     $raw | each {|c|
         let author_login = (try { $c.author.login } catch { "" })
