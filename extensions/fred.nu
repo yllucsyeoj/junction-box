@@ -7,14 +7,14 @@ export const FRED_PRIMITIVE_META = {
     fred_series: {
         category: "fred"
         color: "#059669"
-        wirable: []
+        wirable: ["series_id"]
         agent_hint: "Fetch FRED economic indicator observations. Returns a table with date, value. Common IDs: GDPC1 (GDP), CPALTT01USM659S (CPI), FEDFUNDS (Fed Funds Rate), DGS10 (10Y Yield), M2SL (M2), UNRATE (Unemployment), INDPRO (Industrial Production), RRSFS (Retail Sales). Uses FRED_API_KEY from .env if available."
         param_options: {}
     }
     fred_search: {
         category: "fred"
         color: "#059669"
-        wirable: []
+        wirable: ["query"]
         agent_hint: "Search FRED series by keyword. Returns a table with series_id, title, start_date, end_date, frequency, units. Use to discover series IDs for fred_series node."
         param_options: {}
     }
@@ -42,7 +42,8 @@ export def "prim-fred-series" [
     let ten_yrs_ago = $"($ten_yrs_ago_year)-01-01"
     let s = if ($start | is-empty) { $ten_yrs_ago } else { $start }
     let e = if ($end | is-empty)   { $today       } else { $end }
-    let url = $"https://api.stlouisfed.org/fred/series/observations?series_id=($series_id)&api_key=($key)&file_type=json&observation_start=($s)&observation_end=($e)&units=($units)&limit=($limit | into int)"
+    let series_id_val = if ($series_id | str starts-with '"') { try { $series_id | from json } catch { $series_id } } else { $series_id }
+    let url = $"https://api.stlouisfed.org/fred/series/observations?series_id=($series_id_val)&api_key=($key)&file_type=json&observation_start=($s)&observation_end=($e)&units=($units)&limit=($limit | into int)"
     let raw = (http get -H {User-Agent: $FRED_UA} $url)
     let observations = (try { $raw.observations } catch { [] })
     $observations | each {|o|
@@ -63,7 +64,8 @@ export def "prim-fred-search" [
     if ($key | is-empty) {
         error make {msg: "FRED_API_KEY not set in .env — get a free key at fred.stlouisfed.org/docs/api/api_key.html"}
     }
-    let q = ($query | url encode)
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    let q = ($query_val | url encode)
     let url = $"https://api.stlouisfed.org/fred/series/search?search_text=($q)&api_key=($key)&file_type=json&limit=($limit | into int)"
     let raw = (http get -H {User-Agent: $FRED_UA} $url)
     let results = (try { $raw.seriess } catch { [] })

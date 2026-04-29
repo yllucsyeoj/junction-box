@@ -13,7 +13,7 @@ export const COINGECKO_PRIMITIVE_META = {
     coingecko_simple: {
         category: "coingecko"
         color: "#6c46c7"
-        wirable: []
+        wirable: ["ids"]
         agent_hint: "Fetch price, market cap, 24h change for specific coin IDs from CoinGecko. Returns a record keyed by coin ID with price, market_cap, 24h_change, 24h_volume. Use --ids to specify coins (e.g. bitcoin,ethereum)."
         param_options: {}
     }
@@ -51,9 +51,10 @@ export def "prim-coingecko-simple" [
     --include_market_cap: string = "true" # Include market cap (true/false)
     --include_24h_vol:     string = "true" # Include 24h volume (true/false)
 ]: nothing -> record {
-    let url = $"https://api.coingecko.com/api/v3/simple/price?ids=($ids)&vs_currencies=($vs)&include_market_cap=($include_market_cap)&include_24hr_vol=($include_24h_vol)&include_24hr_change=true"
+    let ids_val = if ($ids | str starts-with '"') { try { $ids | from json } catch { $ids } } else { $ids }
+    let url = $"https://api.coingecko.com/api/v3/simple/price?ids=($ids_val)&vs_currencies=($vs)&include_market_cap=($include_market_cap)&include_24hr_vol=($include_24h_vol)&include_24hr_change=true"
     let raw = (http get -H {User-Agent: $CG_UA} $url)
-    let coin_ids = ($ids | split row "," | each {|id| $id | str trim })
+    let coin_ids = ($ids_val | split row "," | each {|id| $id | str trim })
     let result = {}
     for $cid in $coin_ids {
         if ($cid in $raw) {
