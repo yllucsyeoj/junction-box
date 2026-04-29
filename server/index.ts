@@ -147,13 +147,13 @@ app.get('/', (c) => c.json({
   endpoints: {
     'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
-    'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~15KB). Supports ?category= filter. Start here.`,
+    'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~32KB). Supports ?category= filter. Start here.`,
     'GET /catalog?category=X': 'Filter catalog by category. Core: input, transform, compute, datetime, logic, output, file, external. Data sources: hn, reddit, wikipedia, youtube, github, rss, web, market, coingecko, feargreed, sec, fred, bls, template.',
-    'GET /defs': `All ${nodeSpec.length} node types — WARNING: ~112KB. Use GET /defs/:type for a single node instead.`,
+    'GET /defs': `All ${nodeSpec.length} node types — WARNING: ~113KB. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
     'GET /nodes': 'Raw node spec (no examples)',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. Default: no intermediate outputs. Add ?outputs=full to include per-node outputs for debugging.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch by alias. Add ?outputs=full for per-node debug outputs.',
     'POST /patch': 'Save a validated graph: {alias, description, graph}',
     'GET /patches': 'List saved patches',
     'GET /patch/:alias': 'Get a saved patch',
@@ -199,6 +199,10 @@ app.get('/', (c) => c.json({
     {
       issue: 'filter, sort, select do not support nested field paths',
       solution: 'Columns must be top-level names. To filter on address.city, first use "get" to extract the nested record, then filter on top-level keys. Or use row_apply to promote nested fields.',
+    },
+    {
+      issue: 'Reading /exec responses — no post-processing needed',
+      solution: 'The API returns plain JSON. Read the raw curl stdout directly — do not pipe through python, jq, or any parser. Example: curl -s -X POST .../exec -H "Content-Type: application/json" -d @graph.json — then read the output as-is. Piping through python3 -m json.tool breaks on control characters in strings.',
     },
   ],
 
@@ -275,7 +279,7 @@ app.post('/run', async (c) => {
   const graph = await c.req.json()
 
   // Validate before executing so the frontend gets a structured error, not a JS crash
-  const runValidationErrors = validateGraph(graph as any, nodeSpec)
+  const { errors: runValidationErrors } = validateGraph(graph as any, nodeSpec)
   const encoder = new TextEncoder()
   if (runValidationErrors.length > 0) {
     const body = new ReadableStream({
@@ -561,7 +565,7 @@ app.post('/exec', async (c) => {
   }
 
   // Pre-execution validation
-  const validationErrors = validateGraph(graph as any, nodeSpec)
+  const { errors: validationErrors, warnings: validationWarnings } = validateGraph(graph as any, nodeSpec)
   if (validationErrors.length > 0) {
     logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'validation', node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 })
     return c.json({
@@ -569,6 +573,7 @@ app.post('/exec', async (c) => {
       run_id,
       fatal: null,
       validation_errors: validationErrors,
+      warnings: [],
       errors: {},
       skipped: [],
       outputs: {},
@@ -609,6 +614,7 @@ app.post('/exec', async (c) => {
     const errResp: Record<string, unknown> = {
       status: 'error', run_id,
       validation_errors: [],
+      warnings: validationWarnings,
       errors,
       fatal: fatalError,
       skipped: outputsMode !== 'none' ? skipped : [],
@@ -638,6 +644,7 @@ app.post('/exec', async (c) => {
   const resp: Record<string, unknown> = {
     status: 'complete', run_id,
     validation_errors: [],
+    warnings: validationWarnings,
     errors: {},
     fatal: null,
     skipped: outputsMode !== 'none' ? skipped : [],
@@ -668,7 +675,7 @@ app.post('/patch', async (c) => {
   }
 
   // Validate before storing
-  const validationErrors = validateGraph(graph as any, nodeSpec)
+  const { errors: validationErrors } = validateGraph(graph as any, nodeSpec)
   if (validationErrors.length > 0) {
     return c.json({ error: 'Graph validation failed — patch not stored.', validation_errors: validationErrors }, 422)
   }

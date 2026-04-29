@@ -257,6 +257,8 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     { column: 'price', size: '3', op: 'avg', as_col: 'ma3' }
   ),
 
+  row: linear('const', { value: '[[name score]; [alice 80] [bob 60] [carol 95]]' }, 'row', { index: '1' }),
+
   row_apply: linear(
     'const',
     { value: '[[name price qty]; [apple 1.5 3] [banana 0.8 5]]' },
@@ -274,6 +276,14 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     edges: [
       { id: 'e1', from: 'src', from_port: 'output', to: 'op', to_port: 'input' },
     ],
+  },
+
+  'web-htmd': {
+    nodes: [
+      { id: 'src', type: 'web-htmd', position: { x: 0, y: 0 }, params: { url: 'https://example.com', main: 'true' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
   },
 
   return: linear('const', { value: '"the answer is 42"' }, 'return', {}),

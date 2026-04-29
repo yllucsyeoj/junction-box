@@ -51,7 +51,15 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value' | 'unknown_param'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value' | 'unknown_param' | 'duplicate_edge_id'
+  message: string
+  suggestion: string
+}
+
+export interface ValidationWarning {
+  node_id: string
+  type: string
+  warning_type: 'orphaned_node'
   message: string
   suggestion: string
 }
@@ -61,8 +69,9 @@ export interface Graph {
   edges: Array<{ id: string; from: string; from_port: string; to: string; to_port: string }>
 }
 
-export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[] {
+export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: ValidationError[]; warnings: ValidationWarning[] } {
   const errors: ValidationError[] = []
+  const warnings: ValidationWarning[] = []
   const specMap = new Map(specs.map(s => [s.name, s]))
   const nodeMap = new Map(graph.nodes.map(n => [n.id, n]))
   const knownTypes = specs.map(s => s.name)
@@ -148,6 +157,21 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
     }
   }
 
+  // Check for duplicate edge IDs
+  const seenEdgeIds = new Set<string>()
+  for (const edge of graph.edges) {
+    if (seenEdgeIds.has(edge.id)) {
+      errors.push({
+        node_id: edge.to,
+        type: nodeMap.get(edge.to)?.type ?? '?',
+        error_type: 'duplicate_edge_id',
+        message: `Duplicate edge id "${edge.id}" — edge ids must be unique.`,
+        suggestion: `Give each edge a unique id (e.g. "e1", "e2", "e3").`,
+      })
+    }
+    seenEdgeIds.add(edge.id)
+  }
+
   for (const edge of graph.edges) {
     // 4. Edge references a node that doesn't exist
     if (!nodeMap.has(edge.from)) {
@@ -214,5 +238,21 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): ValidationError[
     }
   }
 
-  return errors
+  // Warn about orphaned source nodes (input_type === 'nothing' with no outgoing edges)
+  for (const node of graph.nodes) {
+    const spec = specMap.get(node.type)
+    if (!spec || spec.input_type !== 'nothing') continue
+    const hasOutgoingEdge = graph.edges.some(e => e.from === node.id)
+    if (!hasOutgoingEdge) {
+      warnings.push({
+        node_id: node.id,
+        type: node.type,
+        warning_type: 'orphaned_node',
+        message: `Node "${node.id}" (${node.type}) is a source node with no outgoing edges — it will run but its output will be discarded.`,
+        suggestion: `Connect it to a downstream node, or remove it if unused.`,
+      })
+    }
+  }
+
+  return { errors, warnings }
 }

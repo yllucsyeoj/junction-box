@@ -2,7 +2,7 @@ import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export interface Port { name: string; type: string }
-export interface ParamSpec { name: string; type: string; required: boolean; wirable: boolean; description: string; options?: string[] }
+export interface ParamSpec { name: string; type: string; required: boolean; wirable: boolean; description: string; options?: string[]; format?: 'nuon' | 'plain' }
 export interface NodeSpec {
   name: string
   category: string
@@ -47,6 +47,8 @@ let specs = ($cmds | each {|cmd|
     let param_opts = ($m | get -o param_options | default {})
     let wirable_list = ($m | get -o wirable | default [])
     let required_list = ($m | get -o required_params | default [])
+    let port_type_overrides = ($m | get -o port_types | default {})
+    let param_fmts = ($m | get -o param_formats | default {})
 
     let sig_rows = ($cmd.signatures | transpose key val | first | get val)
     let in_type = ($sig_rows | where parameter_type == 'input' | first | get syntax_shape | default 'any')
@@ -57,6 +59,7 @@ let specs = ($cmds | each {|cmd|
         | where parameter_name != 'help'
         | each {|p|
             let opts = ($param_opts | get -o $p.parameter_name | default null)
+            let fmt = ($param_fmts | get -o $p.parameter_name)
             let base = {
                 name: $p.parameter_name
                 type: ($p.syntax_shape | default 'string')
@@ -64,10 +67,15 @@ let specs = ($cmds | each {|cmd|
                 wirable: ($wirable_list | any {|w| $w == $p.parameter_name})
                 description: ($p.description | default '')
             }
+            let base = if $fmt != null { $base | insert format $fmt } else { $base }
             if $opts != null { $base | insert options $opts } else { $base }
         })
 
-    let wirable_ports = ($params | where {|p| $p.wirable} | each {|p| {name: $p.name, type: $p.type, role: "param"}})
+    let wirable_ports = ($params | where {|p| $p.wirable} | each {|p|
+        let override_type = ($port_type_overrides | get -o $p.name)
+        let port_type = if $override_type != null { $override_type } else { $p.type }
+        {name: $p.name, type: $port_type, role: "param"}
+    })
     {
         name: ($cmd.name | str replace 'prim-' '')
         category: $m.category
