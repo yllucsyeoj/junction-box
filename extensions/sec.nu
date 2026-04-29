@@ -6,49 +6,56 @@ export const SEC_PRIMITIVE_META = {
     sec_10k: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch annual (10-K) financial data for a ticker via EDGAR XBRL: revenue, net income, assets, liabilities, operating income, EPS."
         param_options: {}
     }
     sec_10q: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch quarterly (10-Q) financial data for a ticker via EDGAR XBRL: revenue, net income, operating income, EPS."
         param_options: {}
     }
     sec_8k: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "List recent 8-K material event filings for a ticker. Returns date, accession number, and reported items."
         param_options: {}
     }
     sec_earnings: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch EPS history from EDGAR plus forward estimates from Finviz: history table, eps_ttm, next quarter and multi-year growth rates."
         param_options: {}
     }
     sec_insider: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch insider transactions (Form 4) for a ticker: owner_name, role, transaction_date, code (string: S=sale, P=purchase, F=tax), shares, price_per_share, value, shares_after. Filter on code with: filter(column:code, op:==, value:S)."
         param_options: {}
     }
     sec_filing: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch the text content of any SEC filing by ticker and accession number. Returns the first 3000 chars of the primary document."
         param_options: {}
     }
     sec_proxy: {
         category: "sec"
         color: "#6366f1"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch the latest DEF 14A proxy statement for a ticker: executive compensation tables and shareholder proposal summaries."
         param_options: {}
     }
@@ -216,7 +223,8 @@ export def "prim-sec-10k" [
     --ticker: string = ""       # Stock ticker symbol (e.g. AAPL)
     --years:  string = "4"      # Number of annual filings to return
 ]: nothing -> record {
-    let cik    = (sec_ticker_to_cik $ticker)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let cik    = (sec_ticker_to_cik $ticker_val)
     let padded = (sec_pad_cik $cik)
     let latest = (sec_get_filings $cik "10-K" | first)
     let gaap   = (
@@ -226,7 +234,7 @@ export def "prim-sec-10k" [
     )
     let n = ($years | into int)
     {
-        ticker:     ($ticker | str upcase)
+        ticker:     ($ticker_val | str upcase)
         form:       "10-K"
         date:       $latest.date
         accession:  $latest.accession
@@ -246,7 +254,8 @@ export def "prim-sec-10q" [
     --ticker:   string = ""     # Stock ticker symbol (e.g. AAPL)
     --quarters: string = "4"    # Number of quarters to return
 ]: nothing -> record {
-    let cik    = (sec_ticker_to_cik $ticker)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let cik    = (sec_ticker_to_cik $ticker_val)
     let padded = (sec_pad_cik $cik)
     let latest = (sec_get_filings $cik "10-Q" | first)
     let gaap   = (
@@ -256,7 +265,7 @@ export def "prim-sec-10q" [
     )
     let n = ($quarters | into int)
     {
-        ticker:     ($ticker | str upcase)
+        ticker:     ($ticker_val | str upcase)
         form:       "10-Q"
         date:       $latest.date
         accession:  $latest.accession
@@ -274,7 +283,8 @@ export def "prim-sec-8k" [
     --ticker: string = ""       # Stock ticker symbol (e.g. AAPL)
     --limit:  string = "10"     # Number of filings to return
 ]: nothing -> table {
-    let sym    = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym    = ($ticker_val | str upcase)
     let cik    = (sec_ticker_to_cik $sym)
     let padded = (sec_pad_cik $cik)
     let filings = (sec_get_filings $cik "8-K" | first ($limit | into int))
@@ -304,7 +314,8 @@ export def "prim-sec-earnings" [
     --ticker:   string = ""     # Stock ticker symbol (e.g. AAPL)
     --quarters: string = "8"    # Number of historical quarters to include
 ]: nothing -> record {
-    let sym    = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym    = ($ticker_val | str upcase)
     let cik    = (sec_ticker_to_cik $sym)
     let padded = (sec_pad_cik $cik)
     let n      = ($quarters | into int)
@@ -367,7 +378,8 @@ export def "prim-sec-insider" [
     --ticker: string = ""       # Stock ticker symbol (e.g. AAPL)
     --limit:  string = "20"     # Number of Form 4 filings to parse
 ]: nothing -> table {
-    let sym     = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym     = ($ticker_val | str upcase)
     let cik     = (sec_ticker_to_cik $sym)
     let padded  = (sec_pad_cik $cik)
     let filings = (sec_get_filings $cik "4" | first ($limit | into int))
@@ -394,7 +406,8 @@ export def "prim-sec-filing" [
     --ticker:    string = ""    # Stock ticker symbol (e.g. AAPL)
     --accession: string = ""    # Accession number (e.g. 0001628280-26-022956)
 ]: nothing -> record {
-    let sym    = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym    = ($ticker_val | str upcase)
     let cik    = (sec_ticker_to_cik $sym)
     let padded = (sec_pad_cik $cik)
     let clean  = ($accession | str replace --all '-' '')
@@ -428,7 +441,8 @@ export def "prim-sec-filing" [
 export def "prim-sec-proxy" [
     --ticker: string = ""       # Stock ticker symbol (e.g. AAPL)
 ]: nothing -> record {
-    let sym     = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym     = ($ticker_val | str upcase)
     let cik     = (sec_ticker_to_cik $sym)
     let filings = (sec_get_filings $cik "DEF 14A")
 
