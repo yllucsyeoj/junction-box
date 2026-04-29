@@ -7,14 +7,16 @@ export const MARKET_PRIMITIVE_META = {
     market_snapshot: {
         category: "market"
         color: "#10b981"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch key stats for a stock ticker from Finviz: price, P/E, market cap, margins, analyst target, etc."
         param_options: {}
     }
     market_history: {
         category: "market"
         color: "#10b981"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch OHLCV price history for any ticker via Yahoo Finance. interval: 1m 5m 15m 1h 1d 1wk 1mo. range: 1mo 3mo 6mo 1y 2y 5y ytd max."
         param_options: {
             interval: ["1d", "1wk", "1mo", "1h", "15m", "5m", "1m"]
@@ -42,7 +44,8 @@ export const MARKET_PRIMITIVE_META = {
     market_options: {
         category: "market"
         color: "#10b981"
-        wirable: []
+        wirable: ["ticker"]
+        required_params: ["ticker"]
         agent_hint: "Fetch options chain for a stock ticker from CBOE delayed quotes (~15min delay). Filter by expiry date or type."
         param_options: {
             type: ["both", "calls", "puts"]
@@ -112,7 +115,8 @@ def mkt_parse_option_symbol [sym: string, ticker: string]: nothing -> record {
 export def "prim-market-snapshot" [
     --ticker: string = ""           # Stock ticker symbol (e.g. AAPL, MSFT)
 ]: nothing -> record {
-    let sym  = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym  = ($ticker_val | str upcase)
     let html = (http get -H {User-Agent: $FINVIZ_UA} $"($FINVIZ_URL)($sym)")
 
     let name = (
@@ -162,7 +166,8 @@ export def "prim-market-history" [
     --interval: string = "1d"   # Bar interval: 1m 5m 15m 1h 1d 1wk 1mo
     --range:    string = "1y"   # Date range: 1mo 3mo 6mo 1y 2y 5y ytd max
 ]: nothing -> table {
-    let sym = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym = ($ticker_val | str upcase)
     let url = $"https://query1.finance.yahoo.com/v8/finance/chart/($sym)?interval=($interval)&range=($range)"
     let raw = (http get -H {User-Agent: "research-tool admin@example.com"} $url)
 
@@ -281,7 +286,8 @@ export def "prim-market-options" [
     --type:   string = "both"   # calls, puts, or both
     --limit:  string = "25"     # Max rows per type
 ]: nothing -> table {
-    let sym  = ($ticker | str upcase)
+    let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
+    let sym  = ($ticker_val | str upcase)
     let raw  = (http get
         -H {User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
         $"https://cdn.cboe.com/api/global/delayed_quotes/options/($sym).json")
