@@ -7,21 +7,24 @@ export const YOUTUBE_PRIMITIVE_META = {
     youtube_search: {
         category: "youtube"
         color: "#ef4444"
-        wirable: []
+        wirable: ["query"]
+        required_params: ["query"]
         agent_hint: "Search YouTube for videos matching a query. Returns a table of results with video_id, title, channel, channel_id, published, description, views."
         param_options: {}
     }
     youtube_channel: {
         category: "youtube"
         color: "#ef4444"
-        wirable: []
+        wirable: ["channel"]
+        required_params: ["channel"]
         agent_hint: "Fetch recent videos from a YouTube channel. Accepts a @handle or raw channel ID (UCxxx). Returns a table with video_id, title, published, description, views, channel, channel_id."
         param_options: {}
     }
     youtube_playlist: {
         category: "youtube"
         color: "#ef4444"
-        wirable: []
+        wirable: ["playlist_id"]
+        required_params: ["playlist_id"]
         agent_hint: "Fetch videos from a YouTube playlist by playlist ID. Returns a table with video_id, title, published, description, channel, channel_id."
         param_options: {}
     }
@@ -146,19 +149,20 @@ export def "prim-youtube-channel" [
     --channel: string = ""   # @handle (e.g. @mkbhd) or raw channel ID (UCxxx)
     --limit:   string = "15" # Max number of videos to return
 ]: nothing -> table {
-    if ($channel | is-empty) {
+    let channel_val = if ($channel | str starts-with '"') { try { $channel | from json } catch { $channel } } else { $channel }
+    if ($channel_val | is-empty) {
         error make {msg: "provide --channel as a @handle or UCxxx channel ID"}
     }
 
-    let channel_id = if ($channel | str starts-with "@") {
-        let html  = (http get -H {User-Agent: $YT_UA} $"https://www.youtube.com/($channel)")
+    let channel_id = if ($channel_val | str starts-with "@") {
+        let html  = (http get -H {User-Agent: $YT_UA} $"https://www.youtube.com/($channel_val)")
         let match = ($html | parse --regex '"channelId":"(UC[a-zA-Z0-9_-]+)"')
         if ($match | is-empty) {
-            error make {msg: $"Could not resolve channel ID for ($channel) — handle may not exist"}
+            error make {msg: $"Could not resolve channel ID for ($channel_val) — handle may not exist"}
         }
         $match | first | get capture0
     } else {
-        $channel
+        $channel_val
     }
 
     yt_parse_rss $"https://www.youtube.com/feeds/videos.xml?channel_id=($channel_id)" ($limit | into int)
@@ -169,10 +173,11 @@ export def "prim-youtube-playlist" [
     --playlist_id: string = ""   # YouTube playlist ID (e.g. PLbpi6ZahtOH6...)
     --limit:       string = "25" # Max number of videos to return
 ]: nothing -> table {
-    if ($playlist_id | is-empty) {
+    let playlist_id_val = if ($playlist_id | str starts-with '"') { try { $playlist_id | from json } catch { $playlist_id } } else { $playlist_id }
+    if ($playlist_id_val | is-empty) {
         error make {msg: "provide --playlist_id (the PLxxx string from the playlist URL)"}
     }
-    yt_parse_rss $"https://www.youtube.com/feeds/videos.xml?playlist_id=($playlist_id)" ($limit | into int)
+    yt_parse_rss $"https://www.youtube.com/feeds/videos.xml?playlist_id=($playlist_id_val)" ($limit | into int)
 }
 
 # Fetch metadata for a single YouTube video via oEmbed
@@ -284,11 +289,12 @@ export def "prim-youtube-search" [
     --query: string = ""    # Search terms
     --limit: string = "10"  # Max number of results to return
 ]: nothing -> table {
-    if ($query | is-empty) {
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
 
-    let encoded = ($query | url encode)
+    let encoded = ($query_val | url encode)
     let html    = (http get
         -H {User-Agent: $YT_UA}
         $"https://www.youtube.com/results?search_query=($encoded)")
