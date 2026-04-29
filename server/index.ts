@@ -602,9 +602,10 @@ app.post('/exec', async (c) => {
   const execResult = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any)
 
   try {
+    insertRun(run_id, alias, graph, null, execResult.status)
     insertResponse(run_id, execResult)
   } catch (err) {
-    console.error('Failed to store response:', err)
+    console.error('Failed to store run/response:', err)
   }
 
   const { nodeRecords, ...resp } = execResult
