@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch } from './db'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns } from './db'
 import { loadSpec } from './spec'
 import { runPipeline, type SSEEvent, type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
@@ -758,6 +758,48 @@ app.get('/logs', (c) => {
     .reverse()
 
   return c.json(entries)
+})
+
+// ---------------------------------------------------------------------------
+// GET /runs/:run_id — fetch a stored run and its response
+// ---------------------------------------------------------------------------
+app.get('/runs/:run_id', (c) => {
+  const run_id = c.req.param('run_id')
+  const run = getRun(run_id)
+  if (!run) {
+    return c.json({ status: 'error', error: `Run "${run_id}" not found.` }, 404)
+  }
+  const response = getResponse(run_id)
+  return c.json({
+    run_id: run.run_id,
+    patch_alias: run.patch_alias,
+    status: run.status,
+    graph: run.graph,
+    params: run.params,
+    created_at: run.created_at,
+    response: response?.response ?? null,
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /runs — list runs with optional filters
+// ---------------------------------------------------------------------------
+app.get('/runs', (c) => {
+  const patchAlias = c.req.query('patch_alias') ?? undefined
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 500)
+  const offset = parseInt(c.req.query('offset') ?? '0', 10)
+
+  const { runs, total } = listRuns(patchAlias, limit, offset)
+  return c.json({
+    runs,
+    total,
+    limit,
+    offset,
+    _manifest: {
+      hint: 'Fetch a specific run with GET /runs/:run_id',
+      filters: ['patch_alias', 'limit', 'offset'],
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
