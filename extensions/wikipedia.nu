@@ -6,7 +6,7 @@ export const WIKIPEDIA_PRIMITIVE_META = {
     wiki_search: {
         category: "wikipedia"
         color: "#6b7280"
-        wirable: []
+        wirable: ["query"]
         required_params: ["query"]
         agent_hint: "Search Wikipedia for articles matching a query. Returns a table with title, snippet, pageid. Use to find the exact page title before calling wiki_summary or wiki_sections."
         param_options: {}
@@ -162,10 +162,11 @@ export def "prim-wiki-search" [
     --query: string = ""  # Search terms (required)
     --limit: string = "5" # Max results to return
 ]: nothing -> table {
-    if ($query | is-empty) {
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
-    let q   = ($query | url encode)
+    let q   = ($query_val | url encode)
     let url = $"($WIKI_API)?action=query&list=search&srsearch=($q)&srlimit=($limit | into int)&format=json"
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.query.search | each {|r|
