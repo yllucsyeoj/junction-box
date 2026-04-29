@@ -82,8 +82,38 @@ app.get('/', (c) => c.json({
     step_1: { action: 'GET /catalog', purpose: `Browse all ${nodeSpec.length} node types by name, category, and hint — token-efficient (~15KB). Filter with ?category=transform` },
     step_2: { action: 'GET /defs/:type', purpose: 'Get full schema + example for a specific node type' },
     step_3: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
-    step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=full to include intermediate node outputs (debugging).' },
+    step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=full for per-node debug outputs.' },
     step_5: { action: 'POST /patch to save', purpose: 'Store a working graph for reuse' },
+  },
+
+  // ── Persistence ─────────────────────────────────────────────────────────
+  persistence: {
+    description: 'All patches, runs, and responses are stored in SQLite for later retrieval.',
+    storage: 'Patches, runs, and API responses are persisted in /app/data/junction-box.db',
+    reference_mode: {
+      description: 'Execute pipelines asynchronously and retrieve results later',
+      usage: 'POST /exec with header X-Reference: true → returns {status: "pending", run_id: "..."} immediately',
+      retrieval: 'GET /runs/:run_id → fetch the stored result at any time',
+      example: {
+        step_1: { action: 'POST /exec with X-Reference: true', body: '{nodes: [...], edges: [...]}' },
+        step_1_result: 'Returns {status: "pending", run_id: "mok4vwll-tv031"}',
+        step_2: { action: 'GET /runs/:run_id', purpose: 'Fetch the result later' },
+      },
+    },
+    patches: {
+      description: 'Named graphs stored in SQLite, retrieved by alias',
+      endpoints: ['POST /patch', 'GET /patches', 'GET /patch/:alias', 'DELETE /patch/:alias'],
+    },
+    runs: {
+      description: 'All exec executions are recorded with full response data',
+      endpoints: ['GET /runs', 'GET /runs/:run_id'],
+      query_params: '?patch_alias=X&limit=50&offset=0',
+      use_cases: [
+        'Retrieve a previous result without re-running the pipeline',
+        'List all runs for a specific patch',
+        'Audit trail of all pipeline executions',
+      ],
+    },
   },
 
   // ── Core Concept ─────────────────────────────────────────────────────────
@@ -157,13 +187,16 @@ app.get('/', (c) => c.json({
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
     'GET /nodes': 'Raw node spec (no examples)',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch by alias. Add ?outputs=full for per-node debug outputs.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch. Add X-Reference: true header for async mode (returns run_id immediately). Add ?outputs=full for per-node debug outputs.',
+    'POST /exec (reference mode)': 'Add header X-Reference: true → returns {status: "pending", run_id: "..."} immediately. Execute GET /runs/:run_id later to fetch result.',
     'POST /patch': 'Save a validated graph: {alias, description, graph}',
-    'GET /patches': 'List saved patches',
-    'GET /patch/:alias': 'Get a saved patch',
-    'DELETE /patch/:alias': 'Delete a patch',
+    'GET /patches': 'List all saved patches (stored in SQLite)',
+    'GET /patch/:alias': 'Get a saved patch by alias',
+    'DELETE /patch/:alias': 'Delete a saved patch',
     'GET /visualise/:alias': 'Render a saved patch as an ASCII flowchart diagram — useful for visualizing dataflow pipelines before running',
-    'GET /logs': 'Recent execution log',
+    'GET /runs': 'List all runs with optional filters: ?patch_alias=X&limit=50&offset=0 (all runs stored in SQLite)',
+    'GET /runs/:run_id': 'Fetch a specific run by ID — includes full graph, params, status, and stored response',
+    'GET /logs': 'Recent execution log (JSONL file)',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
   },
 
@@ -208,6 +241,10 @@ app.get('/', (c) => c.json({
     {
       issue: 'Reading /exec responses — no post-processing needed',
       solution: 'The API returns plain JSON. Read the raw curl stdout directly — do not pipe through python, jq, or any parser. Example: curl -s -X POST .../exec -H "Content-Type: application/json" -d @graph.json — then read the output as-is. Piping through python3 -m json.tool breaks on control characters in strings.',
+    },
+    {
+      issue: 'Need to retrieve a previous result without re-running',
+      solution: 'Use reference mode: POST /exec with X-Reference: true header → returns run_id immediately. Then GET /runs/:run_id to fetch the stored result at any time. All runs are persisted in SQLite.',
     },
   ],
 
