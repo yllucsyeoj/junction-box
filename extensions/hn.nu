@@ -6,7 +6,7 @@ export const HN_PRIMITIVE_META = {
     hn_search: {
         category: "hn"
         color: "#f97316"
-        wirable: []
+        wirable: ["query"]
         required_params: ["query"]
         agent_hint: "Search Hacker News stories by keyword via Algolia. type filters to story ask_hn show_hn front_page. sort: relevance or date. Returns a table with id, title, author, points, num_comments, created_at, url."
         param_options: {
@@ -17,7 +17,7 @@ export const HN_PRIMITIVE_META = {
     hn_comments: {
         category: "hn"
         color: "#f97316"
-        wirable: []
+        wirable: ["query"]
         required_params: ["query"]
         agent_hint: "Search Hacker News comment text by keyword via Algolia. Best for sentiment — what is HN actually saying about a company or topic. Returns a table with id, author, body, points, story_id, story_title, story_url, created_at."
         param_options: {
@@ -53,11 +53,12 @@ export def "prim-hn-search" [
     --type:  string = "story"    # Filter: story ask_hn show_hn front_page
     --limit: string = "20"       # Max results to return
 ]: nothing -> table {
-    if ($query | is-empty) {
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
     let endpoint = if $sort == "date" { "search_by_date" } else { "search" }
-    let q        = ($query | url encode)
+    let q        = ($query_val | url encode)
     let url      = $"https://hn.algolia.com/api/v1/($endpoint)?query=($q)&tags=($type)&hitsPerPage=($limit | into int)"
     let doc      = (http get -H {User-Agent: $HN_UA} $url)
     $doc.hits | each {|h|
@@ -79,11 +80,12 @@ export def "prim-hn-comments" [
     --sort:  string = "relevance" # Sort: relevance or date
     --limit: string = "20"        # Max results to return
 ]: nothing -> table {
-    if ($query | is-empty) {
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
     let endpoint = if $sort == "date" { "search_by_date" } else { "search" }
-    let q        = ($query | url encode)
+    let q        = ($query_val | url encode)
     let url      = $"https://hn.algolia.com/api/v1/($endpoint)?query=($q)&tags=comment&hitsPerPage=($limit | into int)"
     let doc      = (http get -H {User-Agent: $HN_UA} $url)
     $doc.hits | each {|h|
