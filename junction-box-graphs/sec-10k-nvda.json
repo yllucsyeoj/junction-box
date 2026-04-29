@@ -1,0 +1,15 @@
+{
+  "description": "Get SEC 10-K filings for NVDA, extract net income over 2 years",
+  "graph": {
+    "nodes": [
+      {"id": "filings", "type": "sec-10k", "params": {"ticker": "NVDA", "years": "2"}},
+      {"id": "rev", "type": "get", "params": {"key": "financials"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "filings", "from_port": "output", "to": "rev", "to_port": "input"},
+      {"from": "rev", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"net_income": [{"period_end": "2026-01-25", "value": 120067000000}, {"period_end": "2025-01-26", "value": 72880000000}]}
+}

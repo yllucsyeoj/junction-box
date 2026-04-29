@@ -1,0 +1,21 @@
+{
+  "description": "Fetch comments for post 1 from JSONPlaceholder, extract email addresses only",
+  "graph": {
+    "nodes": [
+      {"id": "comments", "type": "fetch", "params": {"url": "https://jsonplaceholder.typicode.com/comments?postId=1"}},
+      {"id": "emails", "type": "select", "params": {"columns": "email"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "comments", "from_port": "output", "to": "emails", "to_port": "input"},
+      {"from": "emails", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"email": "Eliseo@gardner.biz"},
+    {"email": "Jayne_Kuhic@sydney.com"},
+    {"email": "Nikita@garfield.biz"},
+    {"email": "Lew@alysha.tv"},
+    {"email": "Hayden@althea.biz"}
+  ]
+}

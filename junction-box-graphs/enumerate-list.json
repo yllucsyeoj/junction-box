@@ -1,0 +1,15 @@
+{
+  "description": "Enumerate a list with index values",
+  "graph": {
+    "nodes": [
+      {"id": "items", "type": "const", "params": {"value": "[a, b, c]"}},
+      {"id": "enum", "type": "enumerate", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "items", "from_port": "output", "to": "enum", "to_port": "input"},
+      {"from": "enum", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"index": 0, "value": "a"}, {"index": 1, "value": "b"}, {"index": 2, "value": "c"}]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "Insert a new row into a table",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name score]; [alice 90] [bob 75]]"}},
+      {"id": "new_row", "type": "const", "params": {"value": "{name: \"carol\", score: 88}"}},
+      {"id": "inserted", "type": "insert-row", "params": {"row": "{}"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "inserted", "to_port": "input"},
+      {"from": "new_row", "from_port": "output", "to": "inserted", "to_port": "row"},
+      {"from": "inserted", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"name": "alice", "score": 90}, {"name": "bob", "score": 75}, {"name": "carol", "score": 88}]
+}

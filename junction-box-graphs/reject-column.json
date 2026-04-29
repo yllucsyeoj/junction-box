@@ -1,0 +1,15 @@
+{
+  "description": "Reject (remove) the age column from a table",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name age city]; [alice 30 NYC] [bob 25 LA] [carol 35 CHI]]"}},
+      {"id": "dropped", "type": "reject", "params": {"columns": "age"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "dropped", "to_port": "input"},
+      {"from": "dropped", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"name": "alice", "city": "NYC"}, {"name": "bob", "city": "LA"}, {"name": "carol", "city": "CHI"}]
+}

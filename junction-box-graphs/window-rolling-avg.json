@@ -1,0 +1,15 @@
+{
+  "description": "Compute a 3-day rolling average on price data using window aggregation",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[day price]; [1 10] [2 12] [3 11] [4 14] [5 13]]"}},
+      {"id": "win", "type": "window", "params": {"column": "price", "size": "3", "op": "avg", "as_col": "ma3"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "win", "to_port": "input"},
+      {"from": "win", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"day": 1, "price": 10, "ma3": 10}, {"day": 2, "price": 12, "ma3": 11}, {"day": 3, "price": 11, "ma3": 11}, {"day": 4, "price": 14, "ma3": 12.33}, {"day": 5, "price": 13, "ma3": 12.67}]
+}

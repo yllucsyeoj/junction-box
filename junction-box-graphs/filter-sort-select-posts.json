@@ -1,0 +1,25 @@
+{
+  "description": "Fetch all posts from JSONPlaceholder, filter to ones with 'lorem' in the title, sort alphabetically, take first 3, return titles",
+  "graph": {
+    "nodes": [
+      {"id": "src", "type": "fetch", "params": {"url": "https://jsonplaceholder.typicode.com/posts"}},
+      {"id": "filtered", "type": "filter", "params": {"column": "title", "op": "contains", "value": "lorem"}},
+      {"id": "sorted", "type": "sort", "params": {"column": "title", "direction": "asc"}},
+      {"id": "limited", "type": "first", "params": {"n": "3"}},
+      {"id": "titles", "type": "select", "params": {"columns": "title"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "src", "from_port": "output", "to": "filtered", "to_port": "input"},
+      {"from": "filtered", "from_port": "output", "to": "sorted", "to_port": "input"},
+      {"from": "sorted", "from_port": "output", "to": "limited", "to_port": "input"},
+      {"from": "limited", "from_port": "output", "to": "titles", "to_port": "input"},
+      {"from": "titles", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "dolorem dolore est ipsam"},
+    {"title": "dolorem eum magni eos aperiam quia"},
+    {"title": "doloremque illum aliquid sunt"}
+  ]
+}

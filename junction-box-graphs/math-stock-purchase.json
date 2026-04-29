@@ -1,0 +1,21 @@
+{
+  "description": "Calculate total stock purchase: price * shares + commission",
+  "graph": {
+    "nodes": [
+      {"id": "price", "type": "const", "params": {"value": "100"}},
+      {"id": "shares", "type": "const", "params": {"value": "50"}},
+      {"id": "multiply", "type": "math", "params": {"op": "*", "operand": "0"}},
+      {"id": "commission", "type": "const", "params": {"value": "9.99"}},
+      {"id": "add", "type": "math", "params": {"op": "+", "operand": "0"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "price", "from_port": "output", "to": "multiply", "to_port": "input"},
+      {"from": "shares", "from_port": "output", "to": "multiply", "to_port": "operand"},
+      {"from": "multiply", "from_port": "output", "to": "add", "to_port": "input"},
+      {"from": "commission", "from_port": "output", "to": "add", "to_port": "operand"},
+      {"from": "add", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": 5009.99
+}

@@ -1,0 +1,13 @@
+{
+  "description": "Get current crypto fear-greed index value",
+  "graph": {
+    "nodes": [
+      {"id": "fg", "type": "fear-greed-now", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "fg", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"value": 32, "label": "Fear"}
+}

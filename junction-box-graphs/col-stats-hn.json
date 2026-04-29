@@ -1,0 +1,15 @@
+{
+  "description": "Compute statistics on num_comments column from HN AI search results",
+  "graph": {
+    "nodes": [
+      {"id": "hn", "type": "hn-search", "params": {"query": "AI", "limit": "20"}},
+      {"id": "stats", "type": "col-stats", "params": {"column": "num_comments"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "hn", "from_port": "output", "to": "stats", "to_port": "input"},
+      {"from": "stats", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"count": 20, "sum": 18526, "avg": 926.3, "min": 197, "max": 2991}
+}

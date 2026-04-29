@@ -1,0 +1,25 @@
+{
+  "description": "Search HN for AI stories, filter for those with comments, sort by most commented, return top 5 with full details",
+  "graph": {
+    "nodes": [
+      {"id": "hn", "type": "hn-search", "params": {"query": "AI", "limit": "20"}},
+      {"id": "with_comments", "type": "filter", "params": {"column": "num_comments", "op": ">", "value": "0"}},
+      {"id": "sorted", "type": "sort", "params": {"column": "num_comments", "direction": "desc"}},
+      {"id": "top5", "type": "first", "params": {"n": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "hn", "from_port": "output", "to": "with_comments", "to_port": "input"},
+      {"from": "with_comments", "from_port": "output", "to": "sorted", "to_port": "input"},
+      {"from": "sorted", "from_port": "output", "to": "top5", "to_port": "input"},
+      {"from": "top5", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"id": "42910910", "title": "The young, inexperienced engineers aiding DOGE", "num_comments": 2991},
+    {"id": "44163063", "title": "My AI skeptic friends are all nuts", "num_comments": 2826},
+    {"id": "47340079", "title": "Don't post generated/AI-edited comments. HN is for conversation between humans", "num_comments": 1668},
+    {"id": "38544729", "title": "Gemini AI", "num_comments": 1602},
+    {"id": "47136179", "title": "IDF killed Gaza aid workers at point blank range in 2025 massacre: Report", "num_comments": 997}
+  ]
+}

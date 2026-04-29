@@ -1,0 +1,15 @@
+{
+  "description": "Search Reddit programming subreddit for AI posts, return titles and scores",
+  "graph": {
+    "nodes": [
+      {"id": "reddit", "type": "reddit-search", "params": {"query": "AI", "subreddit": "programming", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "reddit", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Bloom filters: the niche trick behind a 16× faster API", "score": 239}
+  ]
+}

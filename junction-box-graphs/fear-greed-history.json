@@ -1,0 +1,17 @@
+{
+  "description": "Get current Fear & Greed Index and average over last 7 days",
+  "graph": {
+    "nodes": [
+      {"id": "history", "type": "fear-greed-history", "params": {"days": "7"}},
+      {"id": "avg", "type": "reduce", "params": {"op": "avg"}},
+      {"id": "now", "type": "fear-greed-now", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "history", "from_port": "output", "to": "avg", "to_port": "input"},
+      {"from": "avg", "from_port": "output", "to": "out", "to_port": "input"},
+      {"from": "now", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"current": {"value": 32, "label": "Fear"}, "7day_avg": 27.29}
+}

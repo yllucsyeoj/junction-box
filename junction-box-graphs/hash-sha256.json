@@ -1,0 +1,15 @@
+{
+  "description": "Hash a string using SHA256",
+  "graph": {
+    "nodes": [
+      {"id": "text", "type": "const", "params": {"value": "\"Hello World\""}},
+      {"id": "hash", "type": "hash", "params": {"algo": "sha256"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "text", "from_port": "output", "to": "hash", "to_port": "input"},
+      {"from": "hash", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e"
+}

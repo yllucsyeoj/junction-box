@@ -1,0 +1,15 @@
+{
+  "description": "Get unique values from a list (remove duplicates)",
+  "graph": {
+    "nodes": [
+      {"id": "items", "type": "const", "params": {"value": "[1, 2, 2, 3, 3, 3, 4]"}},
+      {"id": "unique", "type": "uniq", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "items", "from_port": "output", "to": "unique", "to_port": "input"},
+      {"from": "unique", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [1, 2, 3, 4]
+}

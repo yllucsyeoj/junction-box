@@ -1,0 +1,15 @@
+{
+  "description": "Fetch a sample post from JSONPlaceholder API and extract the title",
+  "graph": {
+    "nodes": [
+      {"id": "src", "type": "fetch", "params": {"url": "https://jsonplaceholder.typicode.com/posts/1"}},
+      {"id": "title", "type": "get", "params": {"key": "title"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "src", "from_port": "output", "to": "title", "to_port": "input"},
+      {"from": "title", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit"
+}

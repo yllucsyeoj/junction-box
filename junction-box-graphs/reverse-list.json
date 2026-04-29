@@ -1,0 +1,15 @@
+{
+  "description": "Reverse a list order",
+  "graph": {
+    "nodes": [
+      {"id": "items", "type": "const", "params": {"value": "[1, 2, 3]"}},
+      {"id": "rev", "type": "reverse", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "items", "from_port": "output", "to": "rev", "to_port": "input"},
+      {"from": "rev", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [3, 2, 1]
+}

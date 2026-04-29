@@ -1,0 +1,23 @@
+{
+  "description": "Compare stock snapshots for NVDA, AAPL, MSFT and use LLM to provide investment insights",
+  "graph": {
+    "nodes": [
+      {"id": "nvda", "type": "market-snapshot", "params": {"ticker": "NVDA"}},
+      {"id": "aapl", "type": "market-snapshot", "params": {"ticker": "AAPL"}},
+      {"id": "msft", "type": "market-snapshot", "params": {"ticker": "MSFT"}},
+      {"id": "prices", "type": "append", "params": {}},
+      {"id": "to_json", "type": "to-json", "params": {}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a financial analyst. Given these stock snapshots, compare them and give investment insights. Focus on price, P/E ratio, and analyst recommendation."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "nvda", "from_port": "output", "to": "prices", "to_port": "input"},
+      {"from": "aapl", "from_port": "output", "to": "prices", "to_port": "input"},
+      {"from": "msft", "from_port": "output", "to": "prices", "to_port": "input"},
+      {"from": "prices", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "to_json", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "LLM analysis comparing NVIDIA, Apple, and Microsoft stocks with investment insights on price, valuation, and analyst recommendations"
+}

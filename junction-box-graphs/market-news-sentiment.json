@@ -1,0 +1,21 @@
+{
+  "description": "Combine HN tech news, fear/greed index, and market data, then use LLM to analyze current market conditions",
+  "graph": {
+    "nodes": [
+      {"id": "hn", "type": "hn-search", "params": {"query": "tech AI", "limit": "3"}},
+      {"id": "fg", "type": "fear-greed-now", "params": {}},
+      {"id": "market", "type": "market-snapshot", "params": {"ticker": "SPY"}},
+      {"id": "to_json", "type": "to-json", "params": {}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a financial analyst. Give a brief 2-sentence summary of current market conditions based on news sentiment and market data."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "hn", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "fg", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "market", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "to_json", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "LLM analysis of current market conditions combining tech news sentiment, fear/greed index, and SPY market data"
+}

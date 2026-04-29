@@ -1,0 +1,17 @@
+{
+  "description": "URL encode and decode a string",
+  "graph": {
+    "nodes": [
+      {"id": "text", "type": "const", "params": {"value": "\"Hello World!\""}},
+      {"id": "encoded", "type": "url-encode", "params": {}},
+      {"id": "decoded", "type": "url-decode", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "text", "from_port": "output", "to": "encoded", "to_port": "input"},
+      {"from": "encoded", "from_port": "output", "to": "decoded", "to_port": "input"},
+      {"from": "decoded", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "Hello World!"
+}

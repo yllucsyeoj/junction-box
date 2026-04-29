@@ -1,0 +1,17 @@
+{
+  "description": "Fetch YouTube video transcript and use LLM to summarize key themes and emotional tone",
+  "graph": {
+    "nodes": [
+      {"id": "transcript", "type": "youtube-transcript", "params": {"video_id": "dQw4w9WgXcQ", "lang": "en"}},
+      {"id": "prompt", "type": "const", "params": {"value": "Summarize this song lyrics into key themes and emotional tone:"}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a music analyst. Provide a concise 3-4 sentence summary of these lyrics including themes and emotional tone."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "transcript", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "prompt", "from_port": "output", "to": "llm", "to_port": "context"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "LLM analysis of Rick Astley's 'Never Gonna Give You Up' - themes of unwavering loyalty, emotional honesty, and reassuring devotion with upbeat optimistic tone"
+}

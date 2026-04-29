@@ -1,0 +1,15 @@
+{
+  "description": "Get a specific row from a table by index",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name age]; [alice 30] [bob 25] [carol 35]]"}},
+      {"id": "first", "type": "row", "params": {"index": "0"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "first", "to_port": "input"},
+      {"from": "first", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"name": "alice", "age": 30}
+}

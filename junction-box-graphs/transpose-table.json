@@ -1,0 +1,15 @@
+{
+  "description": "Transpose a table (swap rows and columns)",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name age]; [alice 30] [bob 25] [carol 35]]"}},
+      {"id": "trans", "type": "transpose", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "trans", "to_port": "input"},
+      {"from": "trans", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"column0": "name", "column1": "alice", "column2": "bob", "column3": "carol"}, {"column0": "age", "column1": 30, "column2": 25, "column3": 35}]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Compare AI discussion engagement between Hacker News and Reddit using stats + LLM analysis",
+  "graph": {
+    "nodes": [
+      {"id": "hn", "type": "hn-search", "params": {"query": "AI", "limit": "10"}},
+      {"id": "hn_stats", "type": "col-stats", "params": {"column": "num_comments"}},
+      {"id": "reddit", "type": "reddit-search", "params": {"query": "AI", "subreddit": "programming", "limit": "10"}},
+      {"id": "reddit_stats", "type": "col-stats", "params": {"column": "score"}},
+      {"id": "hn_label", "type": "const", "params": {"value": "\"Hacker News\""}},
+      {"id": "reddit_label", "type": "const", "params": {"value": "\"Reddit programming\""}},
+      {"id": "to_json", "type": "to-json", "params": {}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a social media analyst. Compare the engagement metrics from Hacker News and Reddit. Which platform has higher engagement? Summarize the key differences."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "hn", "from_port": "output", "to": "hn_stats", "to_port": "input"},
+      {"from": "reddit", "from_port": "output", "to": "reddit_stats", "to_port": "input"},
+      {"from": "hn_label", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "reddit_label", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "hn_stats", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "reddit_stats", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "to_json", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "LLM analysis comparing Hacker News and Reddit engagement showing HN has higher depth/comment quality while Reddit has higher volume/breadth"
+}

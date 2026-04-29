@@ -1,0 +1,15 @@
+{
+  "description": "Conditional check: if value > 10 pass through, else return 0",
+  "graph": {
+    "nodes": [
+      {"id": "value", "type": "const", "params": {"value": "42"}},
+      {"id": "check", "type": "if", "params": {"column": "", "op": ">", "value": "10", "fallback": "0"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "value", "from_port": "output", "to": "check", "to_port": "input"},
+      {"from": "check", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": 42
+}

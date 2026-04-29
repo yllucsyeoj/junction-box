@@ -160,6 +160,7 @@ app.get('/', (c) => c.json({
     'GET /patches': 'List saved patches',
     'GET /patch/:alias': 'Get a saved patch',
     'DELETE /patch/:alias': 'Delete a patch',
+    'GET /visualise/:alias': 'Render a saved patch as an ASCII flowchart diagram — useful for visualizing dataflow pipelines before running',
     'GET /logs': 'Recent execution log',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
   },
@@ -693,7 +694,16 @@ app.post('/patch', async (c) => {
     return c.json({ error: 'Failed to save patch to disk.', detail }, 500)
   }
   logRun({ type: 'patch_save', alias })
-  return c.json({ ok: true, alias, validated: true, updated })
+  return c.json({
+    ok: true,
+    alias,
+    validated: true,
+    updated,
+    _manifest: {
+      hint: 'Run this patch: POST /exec {alias: "..."}',
+      visualise: 'GET /visualise/:alias',
+    }
+  })
 })
 
 app.get('/patch/:alias', (c) => {
@@ -702,7 +712,13 @@ app.get('/patch/:alias', (c) => {
   if (!existsSync(filePath)) {
     return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
   }
-  return c.json(JSON.parse(readFileSync(filePath, 'utf8')))
+  return c.json({
+    ...JSON.parse(readFileSync(filePath, 'utf8')),
+    _manifest: {
+      hint: 'Visualize this patch as ASCII diagram: GET /visualise/:alias',
+      run_hint: 'Run this patch: POST /exec {alias: "..."}',
+    }
+  })
 })
 
 app.delete('/patch/:alias', (c) => {
@@ -735,7 +751,13 @@ app.get('/patches', (c) => {
       }
     } catch { return null }
   }).filter(Boolean)
-  return c.json(list)
+  return c.json({
+    patches: list,
+    _manifest: {
+      hint: 'Each patch can be visualized with GET /visualise/:alias or run with POST /exec {alias: "name"}',
+      fields: ['alias', 'description', 'node_types', 'node_count', 'created_at'],
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+{
+  "description": "Wrap a primitive value in a list",
+  "graph": {
+    "nodes": [
+      {"id": "data", "type": "const", "params": {"value": "42"}},
+      {"id": "wrapped", "type": "wrap", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "data", "from_port": "output", "to": "wrapped", "to_port": "input"},
+      {"from": "wrapped", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [42]
+}

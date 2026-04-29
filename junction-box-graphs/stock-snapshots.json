@@ -1,0 +1,24 @@
+{
+  "description": "Fetch stock snapshots for NVDA, AAPL, MSFT plus current datetime",
+  "graph": {
+    "nodes": [
+      {"id": "nvda", "type": "market-snapshot", "params": {"ticker": "NVDA"}},
+      {"id": "aapl", "type": "market-snapshot", "params": {"ticker": "AAPL"}},
+      {"id": "msft", "type": "market-snapshot", "params": {"ticker": "MSFT"}},
+      {"id": "now", "type": "date-now", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "nvda", "from_port": "output", "to": "out", "to_port": "input"},
+      {"from": "aapl", "from_port": "output", "to": "out", "to_port": "input"},
+      {"from": "msft", "from_port": "output", "to": "out", "to_port": "input"},
+      {"from": "now", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {
+    "NVDA": {"price": 200.24},
+    "AAPL": {"price": 267.93},
+    "MSFT": {"price": 424.67},
+    "timestamp": "2026-04-22 13:46:12.146390064 +00:00"
+  }
+}

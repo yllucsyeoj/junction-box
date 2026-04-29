@@ -1,0 +1,19 @@
+{
+  "description": "Fetch Wikipedia summary for Machine learning, use LLM to extract 5 key topics",
+  "graph": {
+    "nodes": [
+      {"id": "wiki", "type": "wiki-summary", "params": {"title": "Machine learning"}},
+      {"id": "extract", "type": "get", "params": {"key": "extract"}},
+      {"id": "prompt", "type": "const", "params": {"value": "Extract 5 key topics from this text as a comma-separated list:"}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a helpful assistant that extracts key topics. Return only a comma-separated list, nothing else."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "wiki", "from_port": "output", "to": "extract", "to_port": "input"},
+      {"from": "extract", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "prompt", "from_port": "output", "to": "llm", "to_port": "context"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "Machine learning, Artificial intelligence, Deep learning, Neural networks, Statistical algorithms"
+}

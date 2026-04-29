@@ -1,0 +1,152 @@
+[
+  {
+    "id": "prompt-1",
+    "request": "Take the list [1, 2, 3, 4, 5] and calculate the sum",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[1, 2, 3, 4, 5]" } },
+        { "id": "sum", "type": "reduce", "params": { "op": "sum" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "sum", "to_port": "input" },
+        { "id": "e2", "from": "sum", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-2",
+    "request": "Filter the table [[name age]; [alice 30] [bob 17] [carol 25]] to keep only adults (age > 18)",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[[name age]; [alice 30] [bob 17] [carol 25]]" } },
+        { "id": "filter", "type": "filter", "params": { "column": "age", "op": ">", "value": "18" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "filter", "to_port": "input" },
+        { "id": "e2", "from": "filter", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-3",
+    "request": "Sort [[name score]; [alice 90] [bob 70] [carol 85]] by score in descending order",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[[name score]; [alice 90] [bob 70] [carol 85]]" } },
+        { "id": "sort", "type": "sort", "params": { "column": "score", "direction": "desc" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "sort", "to_port": "input" },
+        { "id": "e2", "from": "sort", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-4",
+    "request": "Get the first 3 rows from [[a]; [1] [2] [3] [4] [5]]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[[a]; [1] [2] [3] [4] [5]]" } },
+        { "id": "first", "type": "first", "params": { "n": "3" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "first", "to_port": "input" },
+        { "id": "e2", "from": "first", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-5",
+    "request": "Keep only columns a and b from [[a b c]; [1 2 3]]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[[a b c]; [1 2 3]]" } },
+        { "id": "select", "type": "select", "params": { "columns": "a b" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "select", "to_port": "input" },
+        { "id": "e2", "from": "select", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-6",
+    "request": "Add an index to each item in [\"apple\", \"banana\", \"cherry\"]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[\"apple\", \"banana\", \"cherry\"]" } },
+        { "id": "enum", "type": "enumerate", "params": {} },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "enum", "to_port": "input" },
+        { "id": "e2", "from": "enum", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-7",
+    "request": "Remove the first 2 elements from [1, 2, 3, 4, 5]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[1, 2, 3, 4, 5]" } },
+        { "id": "drop", "type": "drop", "params": { "n": "2" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "drop", "to_port": "input" },
+        { "id": "e2", "from": "drop", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-8",
+    "request": "Get the last 2 items from [10, 20, 30, 40, 50]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[[v]; [10] [20] [30] [40] [50]]" } },
+        { "id": "last", "type": "last", "params": { "n": "2" } },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "last", "to_port": "input" },
+        { "id": "e2", "from": "last", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-9",
+    "request": "Reverse the order of [1, 2, 3, 4]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[1, 2, 3, 4]" } },
+        { "id": "rev", "type": "reverse", "params": {} },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "rev", "to_port": "input" },
+        { "id": "e2", "from": "rev", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  },
+  {
+    "id": "prompt-10",
+    "request": "Remove duplicates from [1, 2, 2, 3, 3, 3, 4]",
+    "graph": {
+      "nodes": [
+        { "id": "src", "type": "const", "params": { "value": "[1, 2, 2, 3, 3, 3, 4]" } },
+        { "id": "uniq", "type": "uniq", "params": {} },
+        { "id": "out", "type": "return", "params": {} }
+      ],
+      "edges": [
+        { "id": "e1", "from": "src", "from_port": "output", "to": "uniq", "to_port": "input" },
+        { "id": "e2", "from": "uniq", "from_port": "output", "to": "out", "to_port": "input" }
+      ]
+    }
+  }
+]

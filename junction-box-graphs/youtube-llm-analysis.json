@@ -1,0 +1,21 @@
+{
+  "description": "Search YouTube for Python tutorial videos, extract titles, use LLM to analyze content",
+  "graph": {
+    "nodes": [
+      {"id": "yt_search", "type": "youtube-search", "params": {"query": "Python tutorial", "limit": "3"}},
+      {"id": "titles", "type": "select", "params": {"columns": "title"}},
+      {"id": "json_str", "type": "to-json", "params": {}},
+      {"id": "prompt", "type": "const", "params": {"value": "Given these video titles:"}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are a helpful tech mentor. Summarize what each video appears to teach in one sentence each."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "yt_search", "from_port": "output", "to": "titles", "to_port": "input"},
+      {"from": "titles", "from_port": "output", "to": "json_str", "to_port": "input"},
+      {"from": "json_str", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "prompt", "from_port": "output", "to": "llm", "to_port": "context"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "Analyzed Python tutorial video titles covering full courses, free courses, and quick crash courses for beginners"
+}

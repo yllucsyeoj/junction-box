@@ -1,0 +1,13 @@
+{
+  "description": "Get Wikipedia table of contents for Python language article",
+  "graph": {
+    "nodes": [
+      {"id": "toc", "type": "wiki-sections", "params": {"title": "Python (programming language)"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "toc", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"index": 1, "title": "History"}, {"index": 2, "title": "Design philosophy and features"}, {"index": 3, "title": "Syntax and semantics"}]
+}

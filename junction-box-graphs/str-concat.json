@@ -1,0 +1,17 @@
+{
+  "description": "Concatenate strings with prefix and suffix",
+  "graph": {
+    "nodes": [
+      {"id": "text", "type": "const", "params": {"value": "\"World\""}},
+      {"id": "pre", "type": "const", "params": {"value": "\"Hello, \""}},
+      {"id": "concatted", "type": "str-concat", "params": {"suffix": "!"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "text", "from_port": "output", "to": "concatted", "to_port": "input"},
+      {"from": "pre", "from_port": "output", "to": "concatted", "to_port": "prefix"},
+      {"from": "concatted", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "Hello, World!"
+}

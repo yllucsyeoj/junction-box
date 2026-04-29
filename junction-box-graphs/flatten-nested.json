@@ -1,0 +1,15 @@
+{
+  "description": "Flatten a nested list into a flat list",
+  "graph": {
+    "nodes": [
+      {"id": "nested", "type": "const", "params": {"value": "[[1, 2], [3, 4], [5]]"}},
+      {"id": "flat", "type": "flatten", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "nested", "from_port": "output", "to": "flat", "to_port": "input"},
+      {"from": "flat", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [1, 2, 3, 4, 5]
+}

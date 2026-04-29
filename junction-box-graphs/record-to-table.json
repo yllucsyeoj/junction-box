@@ -1,0 +1,15 @@
+{
+  "description": "Convert a record to key-value table using items node",
+  "graph": {
+    "nodes": [
+      {"id": "record", "type": "const", "params": {"value": "{name: \"Alice\", age: 30, city: \"NYC\"}"}},
+      {"id": "items", "type": "items", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "record", "from_port": "output", "to": "items", "to_port": "input"},
+      {"from": "items", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"key": "name", "value": "Alice"}, {"key": "age", "value": 30}, {"key": "city", "value": "NYC"}]
+}

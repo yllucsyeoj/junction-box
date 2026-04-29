@@ -1,0 +1,15 @@
+{
+  "description": "Double each number in a list using each transformation",
+  "graph": {
+    "nodes": [
+      {"id": "items", "type": "const", "params": {"value": "[1, 2, 3]"}},
+      {"id": "loop", "type": "each", "params": {"expr": "$in * 2"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "items", "from_port": "output", "to": "loop", "to_port": "input"},
+      {"from": "loop", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [2, 4, 6]
+}

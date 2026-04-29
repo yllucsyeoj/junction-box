@@ -1,0 +1,15 @@
+{
+  "description": "Batch (split) a list into chunks of size 3",
+  "graph": {
+    "nodes": [
+      {"id": "items", "type": "const", "params": {"value": "[1, 2, 3, 4, 5, 6, 7]"}},
+      {"id": "chunks", "type": "batch", "params": {"size": "3"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "items", "from_port": "output", "to": "chunks", "to_port": "input"},
+      {"from": "chunks", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [[1, 2, 3], [4, 5, 6], [7]]
+}

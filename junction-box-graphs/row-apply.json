@@ -1,0 +1,15 @@
+{
+  "description": "Apply expression to each row: calculate total = price * qty for each item",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name price qty]; [apple 1.5 3] [banana 0.8 5]]"}},
+      {"id": "applied", "type": "row-apply", "params": {"expr": "$in.price * $in.qty", "as_col": "total"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "applied", "to_port": "input"},
+      {"from": "applied", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"name": "apple", "price": 1.5, "qty": 3, "total": 4.5}, {"name": "banana", "price": 0.8, "qty": 5, "total": 4}]
+}

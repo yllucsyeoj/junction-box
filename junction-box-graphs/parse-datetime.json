@@ -1,0 +1,15 @@
+{
+  "description": "Parse a date string into a datetime value",
+  "graph": {
+    "nodes": [
+      {"id": "date_str", "type": "const", "params": {"value": "\"2024-01-15\""}},
+      {"id": "parsed", "type": "into-datetime", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "date_str", "from_port": "output", "to": "parsed", "to_port": "input"},
+      {"from": "parsed", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "2024-01-15 00:00:00 +00:00"
+}

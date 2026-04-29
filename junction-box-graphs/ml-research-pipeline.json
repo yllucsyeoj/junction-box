@@ -1,0 +1,21 @@
+{
+  "description": "Research pipeline combining Wikipedia summary, YouTube tutorials, and HN discussions to generate ML learning path",
+  "graph": {
+    "nodes": [
+      {"id": "wiki", "type": "wiki-summary", "params": {"title": "Machine learning"}},
+      {"id": "yt", "type": "youtube-search", "params": {"query": "machine learning tutorial", "limit": "3"}},
+      {"id": "hn", "type": "hn-search", "params": {"query": "machine learning", "limit": "3"}},
+      {"id": "to_json", "type": "to-json", "params": {}},
+      {"id": "llm", "type": "llm", "params": {"context": "You are an educational advisor. Based on this Wikipedia summary and these resources, recommend a learning path for someone wanting to learn machine learning."}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "wiki", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "yt", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "hn", "from_port": "output", "to": "to_json", "to_port": "input"},
+      {"from": "to_json", "from_port": "output", "to": "llm", "to_port": "input"},
+      {"from": "llm", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "LLM-generated 4-phase ML learning path based on Wikipedia definition, YouTube tutorials, and HN discussions"
+}

@@ -1,0 +1,73 @@
+# Junction Box Dataset Prompts
+
+## 50 Natural Language Requests for Graph Construction
+
+These prompts represent realistic data processing tasks that Junction Box should be able to handle. They progress from simple to complex and cover major node categories.
+
+### Simple Data Transformation (1-10)
+
+1. Take the list [1, 2, 3, 4, 5] and calculate the sum
+2. Filter the table [[name age]; [alice 30] [bob 17] [carol 25]] to keep only adults (age > 18)
+3. Sort [[name score]; [alice 90] [bob 70] [carol 85]] by score in descending order
+4. Get the first 3 rows from [[a]; [1] [2] [3] [4] [5]]
+5. Keep only columns a and b from [[a b c]; [1 2 3]]
+6. Add an index to each item in ["apple", "banana", "cherry"]
+7. Remove the first 2 elements from [1, 2, 3, 4, 5]
+8. Get the last 2 items from [10, 20, 30, 40, 50]
+9. Reverse the order of [1, 2, 3, 4]
+10. Remove duplicates from [1, 2, 2, 3, 3, 3, 4]
+
+### Data Input/Output (11-20)
+
+11. Fetch users from the JSONPlaceholder API (https://jsonplaceholder.typicode.com/users)
+12. Read the HOME environment variable
+13. List files in the /tmp directory
+14. Write the data [{name: "alice", score: 90}] to /tmp/output.json in JSON format
+15. Return the constant value "hello world"
+16. Create a table with columns name and score, with 3 rows of data
+17. Return the current date and time
+18. Fetch the latest posts from Hacker News using the hn node
+19. Get stock price data for NVDA using market-snapshot
+20. Parse the string "2024-01-15" into a datetime value
+
+### Aggregation & Statistics (21-30)
+
+21. Calculate count, sum, average, min, and max for the price column in [[price]; [10] [20] [15] [30] [25]]
+22. Group [[category value]; [A 10] [A 20] [B 5] [B 15]] by category and calculate the average value per group
+23. Count how many rows are in [[a b]; [1 2] [3 4] [5 6]]
+24. Calculate the sum of all values in [10, 20, 30]
+25. Get the average of the scores column in [[name score]; [alice 90] [bob 75] [carol 85]]
+26. Calculate a 3-period moving average on price data [[day price]; [1 10] [2 12] [3 11] [4 14] [5 13]]
+27. Summarize price column with average and quantity column with sum
+28. Split [1, 2, 3, 4, 5, 6, 7] into batches of 3
+29. Extract the score column from [[name score]; [alice 90] [bob 75]] as a list
+30. Get the column names from a table with columns x, y, z
+
+### String Operations (31-35)
+
+31. Concatenate "Hello, " + "world" + "!" to get "Hello, world!"
+32. URL encode the string "hello world & more"
+33. URL decode "hello%20world%20%26%20more"
+34. Interpolate "Player {name} scored {score} points!" with {name: "Alice", score: 95}
+35. Parse the JSON string '{"a": 1, "b": 2}' into an object
+
+### Data Manipulation (36-42)
+
+36. Merge two records {a: 1, b: 2} and {b: 99, c: 3} (second overwrites)
+37. Combine two lists [1, 2, 3] and [4, 5] into one list
+38. Vertically stack [[a b]; [1 2]] and [[a b]; [3 4]]
+39. Join two tables on id: [[id name]; [1 alice] [2 bob]] with [[id score]; [1 90] [2 80]]
+40. Zip together ["alice", "bob"] and [90, 75] into a table with name and score columns
+41. Flatten [[1, 2], [3, 4], [5]] into [1, 2, 3, 4, 5]
+42. Add a new column 'active' with value true to [[name]; [alice] [bob]]
+
+### Advanced & Multi-Step (43-50)
+
+43. Fetch users from API, filter to keep only those with id > 5, then return the first 3
+44. Get stock data for AAPL, calculate the average price, and if it's above 150 return "buy" else "hold"
+45. Fetch posts from Reddit about NVDA, analyze sentiment with LLM, return summary
+46. Take [1, 2, 3, 4], square each number, then calculate the sum
+47. Create a table with name and email, filter rows where email ends with ".com", sort by name
+48. Fetch JSON from an API, transform each item to extract only id and name fields
+49. Given two lists of prices [100, 200, 300] and [150, 250], calculate percentage increase for each
+50. Process a list of URLs, fetch each one, extract the title, and return all titles as a list

@@ -1,0 +1,17 @@
+{
+  "description": "Merge two records together (second overwrites first)",
+  "graph": {
+    "nodes": [
+      {"id": "base", "type": "const", "params": {"value": "{name: \"Alice\", age: 30}"}},
+      {"id": "extra", "type": "const", "params": {"value": "{city: \"NYC\", age: 31}"}},
+      {"id": "merged", "type": "merge", "params": {"with": "{}"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "base", "from_port": "output", "to": "merged", "to_port": "input"},
+      {"from": "extra", "from_port": "output", "to": "merged", "to_port": "with"},
+      {"from": "merged", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": {"name": "Alice", "age": 31, "city": "NYC"}
+}

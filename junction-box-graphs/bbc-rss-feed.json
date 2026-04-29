@@ -1,0 +1,16 @@
+{
+  "description": "Fetch BBC news RSS feed, extract top 3 headlines with links",
+  "graph": {
+    "nodes": [
+      {"id": "rss", "type": "rss-feed", "params": {"url": "http://feeds.bbci.co.uk/news/rss.xml", "limit": "3"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "rss", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Starman admits No 10 asked about job for aide Matthew Doyle"},
+    {"title": "Husband cleared of manslaughter over wife's suicide"}
+  ]
+}

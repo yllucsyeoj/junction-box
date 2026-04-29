@@ -1,0 +1,13 @@
+{
+  "description": "Fetch YouTube video transcript for Rick Astley's Never Gonna Give You Up",
+  "graph": {
+    "nodes": [
+      {"id": "transcript", "type": "youtube-transcript", "params": {"video_id": "dQw4w9WgXcQ", "lang": "en"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "transcript", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "[♪♪♪] ♪ We're no strangers to love ♪ ♪ You know the rules and so do I ♪ ♪ A full commitment's what I'm thinking of..."
+}

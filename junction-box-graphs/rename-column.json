@@ -1,0 +1,15 @@
+{
+  "description": "Rename a column in a table",
+  "graph": {
+    "nodes": [
+      {"id": "table", "type": "const", "params": {"value": "[[name age]; [alice 30] [bob 25]]"}},
+      {"id": "renamed", "type": "rename", "params": {"from": "name", "to": "full_name"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "table", "from_port": "output", "to": "renamed", "to_port": "input"},
+      {"from": "renamed", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [{"full_name": "alice", "age": 30}, {"full_name": "bob", "age": 25}]
+}

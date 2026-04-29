@@ -1,0 +1,17 @@
+{
+  "description": "Encode a string to base64, then decode it back",
+  "graph": {
+    "nodes": [
+      {"id": "text", "type": "const", "params": {"value": "\"Hello World\""}},
+      {"id": "encode", "type": "encode-base64", "params": {}},
+      {"id": "decode", "type": "decode-base64", "params": {}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "text", "from_port": "output", "to": "encode", "to_port": "input"},
+      {"from": "encode", "from_port": "output", "to": "decode", "to_port": "input"},
+      {"from": "decode", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": "Hello World"
+}
