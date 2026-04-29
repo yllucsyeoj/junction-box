@@ -15,8 +15,8 @@ export def "prim-web-htmd" [
     --no-links                # Strip links from the output
     --raw                     # Return only the markdown string
     --user-agent: string = "" # Custom User-Agent
-]: nothing -> record {
-    let url_val  = if ($url | str starts-with '"') { $url | from json } else { $url }
+]: nothing -> any {
+    let url_val  = if ($url | str starts-with '"') { try { $url | from json } catch { $url } } else { $url }
     let rawInput = if not ($url_val | is-empty) { $url_val } else { $in }
     let target = if ($rawInput | describe) == "string" {
         $rawInput
