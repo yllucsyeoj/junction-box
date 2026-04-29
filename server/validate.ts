@@ -218,10 +218,27 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
           message: `Param "${edge.to_port}" on "${toNode.type}" is not wirable — it only accepts a static value.`,
           suggestion: `Set "${edge.to_port}" as a static param value instead of wiring an edge to it.`,
         })
+      } else {
+        // 6b. Type check for wirable param ports — validate that the source output type
+        // is compatible with what this wirable param expects.
+        // Wirable ports are stored in ports.inputs (not the main "input" port).
+        const wirablePort = toSpec.ports.inputs?.find(p => p.name === edge.to_port && p.name !== 'input')
+        if (wirablePort && nodeMap.has(edge.from)) {
+          const fromSpec = specMap.get(nodeMap.get(edge.from)!.type)
+          if (fromSpec && !typesCompatible(wirablePort.type, fromSpec.output_type)) {
+            errors.push({
+              node_id: edge.to,
+              type: toNode.type,
+              error_type: 'type_mismatch',
+              message: `Node "${edge.from}" (${fromSpec.name}) outputs "${fromSpec.output_type}" but "${toNode.type}" --${edge.to_port} expects "${wirablePort.type}".`,
+              suggestion: `Check the type of your wired connection — ${edge.to_port} on ${toNode.type} requires "${wirablePort.type}" input.`,
+            })
+          }
+        }
       }
     }
 
-    // 6. Type mismatch between connected nodes (best-effort, skipped if type is "any")
+    // 7. Type mismatch between connected nodes (best-effort, skipped if type is "any")
     if (edge.to_port === 'input' && nodeMap.has(edge.from)) {
       const fromSpec = specMap.get(nodeMap.get(edge.from)!.type)
       if (fromSpec && toSpec) {

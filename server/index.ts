@@ -372,7 +372,18 @@ app.get('/defs/:type', (c) => {
   const spec = nodeSpec.find(s => s.name === typeName)
   if (!spec) return c.json({ error: `Unknown node type: "${typeName}"` }, 404)
   const example = EXAMPLES[typeName.replace(/-/g, '_')] ?? EXAMPLES[typeName] ?? null
-  return c.json({ ...spec, example })
+  // Extract wirable params into a separate field with type info and descriptions
+  const wirableParams = spec.ports.inputs
+    .filter(p => p.name !== 'input')
+    .map(p => {
+      const paramSpec = spec.params.find(sp => sp.name === p.name)
+      return {
+        name: p.name,
+        type: p.type,
+        description: paramSpec?.description ?? '',
+      }
+    })
+  return c.json({ ...spec, example, wirable_params: wirableParams })
 })
 
 app.get('/defs', (c) => {

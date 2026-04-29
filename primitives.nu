@@ -50,7 +50,7 @@ export const PRIMITIVE_META = {
     insert_row:    {category: "transform", color: "#3b82f6", wirable: ["row"],          agent_hint: "Append a record as a new row to a table. Wire a record source to --row port.", port_types: {row: "record"}, param_formats: {row: "nuon"}, param_options: {}}
     col_to_list:   {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract a single column from a table as a flat list.", param_options: {}}
     col_stats:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Compute count/sum/avg/min/max for a numeric column. Returns a record.", param_options: {}}
-    summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Multi-column aggregate: --cols 'price,volume' --ops 'avg,sum'. Returns a record of col_op keys."
+    summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Single-operation aggregate: --col 'price' --op 'sum'. Returns a record of col_op keys. To get multiple aggregations, chain separate summarize nodes — one op per node."
                    param_options: {ops: ["avg", "sum", "min", "max", "count"]}}
     null_fill:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Fill null values in a table column with a NUON constant or forward-fill."
                    param_formats: {value: "nuon"}
@@ -64,7 +64,7 @@ export const PRIMITIVE_META = {
     batch:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Split a list into chunks of --size elements. Returns a list of lists.", param_options: {}}
     window:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rolling N-row window aggregate over a table column. Adds a rolling result column."
                    param_options: {op: ["avg", "sum", "min", "max"]}}
-    items:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Convert a record to a [{key, value}] table — complement to columns.", param_options: {}}
+    items:         {category: "transform", color: "#3b82f6", wirable: [], port_types: {input: "record"}, agent_hint: "Convert a record to a [{key, value}] table — complement to columns.", param_options: {}}
     find:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Find the index of the first list element matching a condition ($in = element).", param_options: {}}
     row:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a row at a specific index from a table.", param_options: {}}
     move:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Move a column to a new position in a table. Use --before to insert before another column.", param_options: {}}
@@ -174,12 +174,27 @@ export def "prim-filter" [
     --op: string = "=="          # Operator: >, <, ==, !=, contains
     --value: string = ""         # Comparison value
 ]: table -> table {
+    let desc = (try { $in | get 0 | get $column | describe } catch { "" })
+    let is_datetime_col = ($desc | str contains 'datetime')
+    let input = $in
     match $op {
-        ">" => { where {|r| ($r | get $column) > ($value | into float) } }
-        "<" => { where {|r| ($r | get $column) < ($value | into float) } }
-        "==" => { where {|r| ($r | get $column | into string) == $value } }
-        "!=" => { where {|r| ($r | get $column | into string) != $value } }
-        "contains" => { where {|r| ($r | get $column | into string | str contains $value) } }
+        ">" => {
+            if $is_datetime_col {
+                $input | where {|r| ($r | get $column) > ($value | into datetime)}
+            } else {
+                $input | where {|r| ($r | get $column) > ($value | into float)}
+            }
+        }
+        "<" => {
+            if $is_datetime_col {
+                $input | where {|r| ($r | get $column) < ($value | into datetime)}
+            } else {
+                $input | where {|r| ($r | get $column) < ($value | into float)}
+            }
+        }
+        "==" => { $input | where {|r| ($r | get $column | into string) == $value} }
+        "!=" => { $input | where {|r| ($r | get $column | into string) != $value} }
+        "contains" => { $input | where {|r| ($r | get $column | into string) | str contains $value} }
         _ => { error make {msg: $"Unknown filter op: ($op). Valid: >, <, ==, !=, contains"} }
     }
 }
@@ -189,7 +204,11 @@ export def "prim-map" [
     --column: string = ""        # Column name to add or update
     --value: string = "null"     # NUON literal for the new value
 ]: table -> table {
-    upsert $column {|_| $value | from nuon}
+    if ($value | str starts-with '"') {
+        upsert $column {|_| (try { $value | from json } catch { $value } | from nuon)}
+    } else {
+        upsert $column {|_| ($value | from nuon)}
+    }
 }
 
 # Keep only the specified columns
@@ -606,7 +625,11 @@ export def "prim-update" [
     --field: string = ""             # Field name to update
     --value: string = "null"         # NUON replacement value
 ]: any -> any {
-    update $field ($value | from nuon)
+    if ($value | str starts-with '"') {
+        update $field (try { $value | from json } catch { $value } | from nuon)
+    } else {
+        update $field ($value | from nuon)
+    }
 }
 
 # ── Additional collection operation primitives ────────────────────────────────

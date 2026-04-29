@@ -41,6 +41,25 @@ function extractGotType(raw: string): string | undefined {
   return undefined
 }
 
+// Per-node error hints keyed by nodeType.error_type
+const NODE_ERROR_HINTS: Record<string, Record<string, string>> = {
+  merge: {
+    type_mismatch: 'merge expects record input — did you wire an int or table? Use col_stats or summarize instead for aggregate data.',
+  },
+  summarize: {
+    invalid_param_value: 'summarize only accepts one operation per call — choose avg, sum, min, max, or count. Chain multiple summarize nodes for multiple aggregations.',
+  },
+  filter: {
+    type_mismatch: 'filter column must match the comparison value type. For date/datetime columns, use ISO format strings (e.g. "2026-01-29").',
+  },
+  map: {
+    syntax: 'map --value expects NUON format (e.g. {col: "new_value"} or 42). If wiring a string value, it will be auto-unwrapped.',
+  },
+  update: {
+    syntax: 'update --value expects NUON format. If wiring a string value, it will be auto-unwrapped.',
+  },
+}
+
 // Strip internal file/line references from Nu error output and return a clean message.
 function normalizeNuError(
   raw: string,
@@ -70,6 +89,9 @@ function normalizeNuError(
     error_type = 'network_error'
   }
 
+  // Extract got_type for type_mismatch errors
+  const got_type = (error_type === 'type_mismatch') ? extractGotType(raw) : undefined
+
   // Try to add a hint about which param might be wrong based on the message
   const paramHints: string[] = []
   const paramsObj = params ?? {}
@@ -78,11 +100,20 @@ function normalizeNuError(
       paramHints.push(k)
     }
   }
-  const hint = paramHints.length > 0 ? ` (check param: ${paramHints.join(', ')})` : ''
+  const paramHint = paramHints.length > 0 ? ` (check param: ${paramHints.join(', ')})` : ''
 
-  const got_type = (error_type === 'type_mismatch') ? extractGotType(raw) : undefined
+  // Look up per-node error hint
+  const nodeHint = NODE_ERROR_HINTS[nodeType]?.[error_type] ?? ''
+
+  // Build improved message with all available context
+  let message = stripped || raw.trim()
+  if (got_type) message += ` (got: ${got_type})`
+  if (expectedType && expectedType !== 'any') message += ` (expected: ${expectedType})`
+  if (nodeHint) message += ` — ${nodeHint}`
+  if (paramHint) message += paramHint
+
   const result: { message: string; error_type: string; expected_type?: string; got_type?: string } = {
-    message: (stripped || raw.trim()) + hint,
+    message,
     error_type,
   }
   if (expectedType && expectedType !== 'any') result.expected_type = expectedType

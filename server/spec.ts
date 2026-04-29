@@ -1,7 +1,7 @@
 import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export interface Port { name: string; type: string }
+export interface Port { name: string; type: string; role?: string }
 export interface ParamSpec { name: string; type: string; required: boolean; wirable: boolean; description: string; options?: string[]; format?: 'nuon' | 'plain' }
 export interface NodeSpec {
   name: string
