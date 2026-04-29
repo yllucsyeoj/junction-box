@@ -157,19 +157,21 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     }
   }
 
-  // Check for duplicate edge IDs
+  // Check for duplicate edge IDs (only when edges have explicit id fields)
   const seenEdgeIds = new Set<string>()
   for (const edge of graph.edges) {
-    if (seenEdgeIds.has(edge.id)) {
-      errors.push({
-        node_id: edge.to,
-        type: nodeMap.get(edge.to)?.type ?? '?',
-        error_type: 'duplicate_edge_id',
-        message: `Duplicate edge id "${edge.id}" — edge ids must be unique.`,
-        suggestion: `Give each edge a unique id (e.g. "e1", "e2", "e3").`,
-      })
+    if (edge.id !== undefined) {
+      if (seenEdgeIds.has(edge.id)) {
+        errors.push({
+          node_id: edge.to,
+          type: nodeMap.get(edge.to)?.type ?? '?',
+          error_type: 'duplicate_edge_id',
+          message: `Duplicate edge id "${edge.id}" — edge ids must be unique.`,
+          suggestion: `Give each edge a unique id (e.g. "e1", "e2", "e3").`,
+        })
+      }
+      seenEdgeIds.add(edge.id)
     }
-    seenEdgeIds.add(edge.id)
   }
 
   for (const edge of graph.edges) {
@@ -179,7 +181,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
         node_id: edge.to,
         type: nodeMap.get(edge.to)?.type ?? '?',
         error_type: 'broken_edge',
-        message: `Edge "${edge.id}" references source node "${edge.from}" which does not exist.`,
+        message: `Edge${edge.id !== undefined ? ` "${edge.id}"` : ''} references source node "${edge.from}" which does not exist.`,
         suggestion: `Check that the "from" node id is correct.`,
       })
     }
