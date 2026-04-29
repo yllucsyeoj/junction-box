@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
-import { writeFileSync, readFileSync, appendFileSync, unlinkSync, readdirSync, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import { upsertPatch, getPatch, listPatches, deletePatch } from './db'
 import { loadSpec } from './spec'
 import { runPipeline, type SSEEvent, type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
@@ -14,7 +15,6 @@ app.use('/*', cors())
 
 const ROOT = resolve(import.meta.dir, '..')
 const DATA_DIR = process.env.GONUDE_DATA_DIR ? resolve(process.env.GONUDE_DATA_DIR) : resolve(ROOT, 'data')
-const PATCHES_DIR = resolve(DATA_DIR, 'patches')
 const LOG_FILE = resolve(DATA_DIR, 'runs.jsonl')
 const SERVER_START = Date.now()
 
@@ -22,8 +22,8 @@ function makeRunId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-// Ensure data directories exist (important for fresh Docker volumes)
-mkdirSync(PATCHES_DIR, { recursive: true })
+// Ensure data directory exists (important for fresh Docker volumes)
+mkdirSync(DATA_DIR, { recursive: true })
 
 // Load node spec once at startup
 console.log('Loading node spec...')
@@ -537,12 +537,12 @@ app.post('/exec', async (c) => {
     // Support alias shorthand: {"alias": "my-patch"}
     if (body && typeof body === 'object' && 'alias' in body) {
       alias = String(body.alias)
-      const aliasPath = resolve(PATCHES_DIR, `${alias}.json`)
-      if (!existsSync(aliasPath)) {
+      const patch = getPatch(alias)
+      if (!patch) {
         logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
         return c.json({ status: 'error', run_id, fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
       }
-      graph = JSON.parse(readFileSync(aliasPath, 'utf8')).graph
+      graph = patch.graph
     } else {
       graph = body
     }
@@ -683,16 +683,7 @@ app.post('/patch', async (c) => {
     return c.json({ error: 'Graph validation failed — patch not stored.', validation_errors: validationErrors }, 422)
   }
 
-  const patchPath = resolve(PATCHES_DIR, `${alias}.json`)
-  const updated = existsSync(patchPath)
-  const record = { alias, description: description.trim(), graph, created_at: new Date().toISOString() }
-  try {
-    mkdirSync(PATCHES_DIR, { recursive: true })
-    writeFileSync(patchPath, JSON.stringify(record, null, 2))
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    return c.json({ error: 'Failed to save patch to disk.', detail }, 500)
-  }
+  const updated = upsertPatch(alias, description.trim(), graph)
   logRun({ type: 'patch_save', alias })
   return c.json({
     ok: true,
@@ -708,12 +699,15 @@ app.post('/patch', async (c) => {
 
 app.get('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
-  const filePath = resolve(PATCHES_DIR, `${alias}.json`)
-  if (!existsSync(filePath)) {
+  const patch = getPatch(alias)
+  if (!patch) {
     return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
   }
   return c.json({
-    ...JSON.parse(readFileSync(filePath, 'utf8')),
+    alias: patch.alias,
+    description: patch.description,
+    graph: patch.graph,
+    created_at: patch.created_at,
     _manifest: {
       hint: 'Visualize this patch as ASCII diagram: GET /visualise/:alias',
       run_hint: 'Run this patch: POST /exec {alias: "..."}',
@@ -723,36 +717,18 @@ app.get('/patch/:alias', (c) => {
 
 app.delete('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
-  const filePath = resolve(PATCHES_DIR, `${alias}.json`)
-  if (!existsSync(filePath)) {
+  const deleted = deletePatch(alias)
+  if (!deleted) {
     return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
   }
-  unlinkSync(filePath)
   logRun({ type: 'patch_delete', alias })
   return c.json({ ok: true, alias })
 })
 
 app.get('/patches', (c) => {
-  const files = existsSync(PATCHES_DIR)
-    ? readdirSync(PATCHES_DIR).filter(f => f.endsWith('.json'))
-    : []
-  const list = files.map(f => {
-    try {
-      const record = JSON.parse(readFileSync(resolve(PATCHES_DIR, f), 'utf8'))
-      const node_types: string[] = [...new Set<string>(
-        (record.graph?.nodes ?? []).map((n: { type: string }) => n.type)
-      )]
-      return {
-        alias: record.alias,
-        description: record.description,
-        node_types,
-        node_count: record.graph?.nodes?.length ?? 0,
-        created_at: record.created_at,
-      }
-    } catch { return null }
-  }).filter(Boolean)
+  const patches = listPatches()
   return c.json({
-    patches: list,
+    patches,
     _manifest: {
       hint: 'Each patch can be visualized with GET /visualise/:alias or run with POST /exec {alias: "name"}',
       fields: ['alias', 'description', 'node_types', 'node_count', 'created_at'],
@@ -810,14 +786,13 @@ app.post('/parse-nuon', async (c) => {
 // ---------------------------------------------------------------------------
 app.get('/visualise/:alias', async (c) => {
   const alias = c.req.param('alias')
-  const patchPath = resolve(PATCHES_DIR, `${alias}.json`)
+  const patch = getPatch(alias)
 
-  if (!existsSync(patchPath)) {
+  if (!patch) {
     return c.json({ error: 'Patch not found', alias }, 404)
   }
 
   try {
-    const patch = JSON.parse(readFileSync(patchPath, 'utf-8'))
     const mermaid = graphToMermaid(patch.graph)
     const ascii = renderMermaidASCII(mermaid, { useAscii: true })
     return c.text(ascii, 200)
