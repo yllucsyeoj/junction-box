@@ -3,8 +3,10 @@ import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { writeFileSync, readFileSync, appendFileSync, unlinkSync, readdirSync, existsSync, mkdirSync } from 'node:fs'
 import { loadSpec } from './spec'
-import { runPipeline, type SSEEvent, type NodeRunRecord } from './execute'
+import { type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
+import { executeGraph } from './exec-runner'
+import { insertRun, updateRunStatus, insertResponse } from './db'
 import { EXAMPLES } from './examples'
 import { graphToMermaid } from './mermaid'
 import { renderMermaidASCII } from 'beautiful-mermaid'
@@ -567,94 +569,48 @@ app.post('/exec', async (c) => {
     }, 400)
   }
 
-  // Pre-execution validation
-  const { errors: validationErrors, warnings: validationWarnings } = validateGraph(graph as any, nodeSpec)
-  if (validationErrors.length > 0) {
-    logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'validation', node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 })
-    return c.json({
-      status: 'error',
-      run_id,
-      fatal: null,
-      validation_errors: validationErrors,
-      warnings: [],
-      errors: {},
-      skipped: [],
-      outputs: {},
-      result: null,
-    }, 422)
+  const referenceMode = c.req.header('x-reference') === 'true' || c.req.query('reference') === 'true'
+
+  if (referenceMode) {
+    try {
+      insertRun(run_id, alias, graph, null, 'pending')
+    } catch (err) {
+      return c.json({ status: 'error', run_id, fatal: 'Failed to create run record' }, 500)
+    }
+
+    const execGraph = graph as any
+    const execAlias = alias
+    const execRunId = run_id
+    const execOutputsMode = outputsMode
+
+    ;(async () => {
+      const execT0 = Date.now()
+      try {
+        const result = await executeGraph(execGraph, nodeSpec, execRunId, execOutputsMode as any)
+        updateRunStatus(execRunId, result.status)
+        insertResponse(execRunId, result)
+        logRun({ type: 'exec', run_id: execRunId, alias: execAlias, status: result.status, node_count: execGraph.nodes?.length ?? 0, duration_ms: Date.now() - execT0 }, result.nodeRecords)
+      } catch (err) {
+        updateRunStatus(execRunId, 'error')
+        logRun({ type: 'exec', run_id: execRunId, alias: execAlias, status: 'error', fatal: String(err), duration_ms: Date.now() - execT0 })
+      }
+    })()
+
+    return c.json({ status: 'pending', run_id })
   }
 
-  const outputs: Record<string, string> = {}  // raw JSON strings, decoded at response time
-  const errors: Record<string, { message: string; error_type: string }> = {}
-  const skipped: string[] = []
-  let fatalError: string | null = null
-  let nodeRecords: NodeRunRecord[] = []
+  const execResult = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any)
 
   try {
-    nodeRecords = await runPipeline(graph as any, (event: SSEEvent) => {
-      if ('node_id' in event) {
-        if (event.status === 'done') outputs[event.node_id] = event.output
-        if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type, ...(event.expected_type ? { expected_type: event.expected_type } : {}), ...(event.got_type ? { got_type: event.got_type } : {}) }
-        if (event.status === 'skipped') skipped.push(event.node_id)
-      }
-      if ('status' in event && event.status === 'fatal') {
-        fatalError = (event as { status: 'fatal'; error: string }).error
-      }
-    }, nodeSpec)
+    insertResponse(run_id, execResult)
   } catch (err) {
-    fatalError = err instanceof Error ? err.message : String(err)
+    console.error('Failed to store response:', err)
   }
 
-  const g = graph as { nodes: Array<{ id: string; type: string }> }
-  const nodeCount = g.nodes?.length ?? 0
+  const { nodeRecords, ...resp } = execResult
+  logRun({ type: 'exec', run_id, alias, status: resp.status, node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 }, nodeRecords)
 
-  if (fatalError || Object.keys(errors).length > 0) {
-    const partialOutputs: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(outputs)) {
-      try { partialOutputs[k] = JSON.parse(v) } catch { partialOutputs[k] = v }
-    }
-    logRun({ type: 'exec', run_id, alias, status: 'error', node_count: nodeCount, error_count: Object.keys(errors).length, fatal: fatalError, duration_ms: Date.now() - t0 }, nodeRecords)
-    const errResp: Record<string, unknown> = {
-      status: 'error', run_id,
-      validation_errors: [],
-      warnings: validationWarnings,
-      errors,
-      fatal: fatalError,
-      skipped: outputsMode !== 'none' ? skipped : [],
-      outputs: outputsMode !== 'none' ? partialOutputs : {},
-      result: null,
-    }
-    return c.json(errResp, 500)
-  }
-
-  // Decode each node's JSON output string into a real value for the API response.
-  // The internal outputs map stays as strings (needed for inter-node passing in execute.ts).
-  const decodedOutputs: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(outputs)) {
-    try { decodedOutputs[k] = JSON.parse(v) } catch { decodedOutputs[k] = v }
-  }
-
-  // Find the "result" value: first return node, or last node in execution order.
-  const returnNode = g.nodes.find(n => n.type === 'return')
-  const rawResult = returnNode
-    ? (outputs[returnNode.id] ?? null)
-    : (Object.values(outputs).at(-1) ?? null)
-  const result = rawResult === null ? null : (() => {
-    try { return JSON.parse(rawResult) } catch { return rawResult }
-  })()
-
-  logRun({ type: 'exec', run_id, alias, status: 'complete', node_count: nodeCount, duration_ms: Date.now() - t0 }, nodeRecords)
-  const resp: Record<string, unknown> = {
-    status: 'complete', run_id,
-    validation_errors: [],
-    warnings: validationWarnings,
-    errors: {},
-    fatal: null,
-    skipped: outputsMode !== 'none' ? skipped : [],
-    outputs: outputsMode !== 'none' ? decodedOutputs : {},
-    result,
-  }
-  return c.json(resp)
+  return c.json(resp, resp.status === 'error' ? 500 : 200)
 })
 
 // ---------------------------------------------------------------------------
