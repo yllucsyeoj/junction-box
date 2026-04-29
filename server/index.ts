@@ -6,6 +6,8 @@ import { loadSpec } from './spec'
 import { runPipeline, type SSEEvent, type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
 import { EXAMPLES } from './examples'
+import { graphToMermaid } from './mermaid'
+import { renderMermaidASCII } from 'beautiful-mermaid'
 
 const app = new Hono()
 app.use('/*', cors())
@@ -779,6 +781,28 @@ app.post('/parse-nuon', async (c) => {
     return c.json({ error: 'Invalid NUON', detail: parsed.error }, 400)
   }
   return c.json(parsed.graph)
+})
+
+// ---------------------------------------------------------------------------
+// GET /visualise/:alias — render a saved patch as ASCII diagram
+// ---------------------------------------------------------------------------
+app.get('/visualise/:alias', async (c) => {
+  const alias = c.req.param('alias')
+  const patchPath = resolve(PATCHES_DIR, `${alias}.json`)
+
+  if (!existsSync(patchPath)) {
+    return c.json({ error: 'Patch not found', alias }, 404)
+  }
+
+  try {
+    const patch = JSON.parse(readFileSync(patchPath, 'utf-8'))
+    const mermaid = graphToMermaid(patch.graph)
+    const ascii = renderMermaidASCII(mermaid, { useAscii: true })
+    return c.text(ascii, 200)
+  } catch (err) {
+    console.error('visualise error:', err)
+    return c.json({ error: 'Failed to render diagram', details: String(err) }, 500)
+  }
 })
 
 // ---------------------------------------------------------------------------
