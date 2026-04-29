@@ -5,7 +5,7 @@
 # Keys match the short name (strip "prim-", replace "-" with "_").
 export const PRIMITIVE_META = {
     fetch:         {category: "input",     color: "#f97316", wirable: ["url"],           agent_hint: "Fetch JSON/table data from a URL via HTTP GET. --url is wirable — wire a string output to set it dynamically.", param_options: {}}
-    const:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_options: {}}
+    const:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_formats: {value: "nuon"}, param_options: {}}
     env:           {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
     file_in:       {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
     ls:            {category: "file",      color: "#f97316", wirable: [],               agent_hint: "List directory contents as a table (name, type, size, modified)", param_options: {}}
@@ -18,8 +18,9 @@ export const PRIMITIVE_META = {
     into_filesize: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 5MB into a filesize value", param_options: {}}
     into_duration: {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Convert a string like 1hr 30min into a duration value", param_options: {}}
     filter:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Filter table rows: pick column, op (>, <, ==, !=, contains), and value (plain string — no NUON quoting needed). Column must be a top-level name — dotted paths like address.city are not supported."
+                   param_formats: {value: "plain"}
                    param_options: {op: ["==", "!=", ">", "<", "contains"]}}
-    map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_options: {}}
+    map:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add or replace a column with a NUON constant value", param_formats: {value: "nuon"}, param_options: {}}
     select:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Keep only the named columns from a table (comma- or space-separated, e.g. \"name,email,phone\")", param_options: {}}
     sort:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Sort a table by a column. direction: asc or desc"
                    param_options: {direction: ["asc", "desc"]}}
@@ -28,35 +29,38 @@ export const PRIMITIVE_META = {
     last:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return the last N rows of a table (default N=1).", param_options: {}}
     rename:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rename a column: provide old and new column name", param_options: {}}
     get:           {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Get a field from a record or an index from a list", param_options: {}}
-    merge:         {category: "transform", color: "#3b82f6", wirable: ["with"],         agent_hint: "Merge a NUON record into the input record — overlapping keys overwritten. Wire a record to --with for multi-input.", param_options: {}}
+    merge:         {category: "transform", color: "#3b82f6", wirable: ["with"],         agent_hint: "Merge a NUON record into the input record — overlapping keys overwritten. Wire a record to --with for multi-input.", port_types: {with: "record"}, param_formats: {with: "nuon"}, param_options: {}}
     reject:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Remove named columns from a table or record (comma- or space-separated)", param_options: {}}
-    update:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Update a field in a record/table with a NUON value", param_options: {}}
+    update:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Update a field in a record/table with a NUON value", param_formats: {value: "nuon"}, param_options: {}}
     group_by:      {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Group table rows by a column — returns a record keyed by the column values", param_options: {}}
     reduce:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Reduce a list to a single value: sum, product, min, max, avg, or join"
                    param_options: {op: ["sum", "product", "min", "max", "avg", "join"]}}
     uniq:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Return unique values from a list (deduplicate)", param_options: {}}
-    append:        {category: "transform", color: "#3b82f6", wirable: ["items"],        agent_hint: "Append to a list. Wire a second list/value to --items for multi-input.", param_options: {}}
+    append:        {category: "transform", color: "#3b82f6", wirable: ["items"],        agent_hint: "Append to a list. Wire a second list/value to --items for multi-input.", port_types: {items: "list"}, param_formats: {items: "nuon"}, param_options: {}}
     flatten:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Flatten one level of nesting from a list of lists", param_options: {}}
     reverse:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Reverse a list or table", param_options: {}}
     drop:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Skip the first N rows/elements from a list or table", param_options: {}}
     enumerate:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Add a zero-based index field to each element — returns [{index, value}, ...]", param_options: {}}
     wrap:          {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Wrap a single value into a one-element list", param_options: {}}
     join:          {category: "transform", color: "#3b82f6", wirable: ["right"],        agent_hint: "SQL-style join two tables on a shared column. Wire second table to --right port."
+                   port_types: {right: "table"}
+                   param_formats: {right: "nuon"}
                    param_options: {type: ["inner", "left"]}}
-    table_concat:  {category: "transform", color: "#3b82f6", wirable: ["more"],         agent_hint: "Vertically stack two tables (UNION ALL). Wire the second table to --more port.", param_options: {}}
-    insert_row:    {category: "transform", color: "#3b82f6", wirable: ["row"],          agent_hint: "Append a record as a new row to a table. Wire a record source to --row port.", param_options: {}}
+    table_concat:  {category: "transform", color: "#3b82f6", wirable: ["more"],         agent_hint: "Vertically stack two tables (UNION ALL). Wire the second table to --more port.", port_types: {more: "table"}, param_formats: {more: "nuon"}, param_options: {}}
+    insert_row:    {category: "transform", color: "#3b82f6", wirable: ["row"],          agent_hint: "Append a record as a new row to a table. Wire a record source to --row port.", port_types: {row: "record"}, param_formats: {row: "nuon"}, param_options: {}}
     col_to_list:   {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract a single column from a table as a flat list.", param_options: {}}
     col_stats:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Compute count/sum/avg/min/max for a numeric column. Returns a record.", param_options: {}}
     summarize:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Multi-column aggregate: --cols 'price,volume' --ops 'avg,sum'. Returns a record of col_op keys."
                    param_options: {ops: ["avg", "sum", "min", "max", "count"]}}
     null_fill:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Fill null values in a table column with a NUON constant or forward-fill."
+                   param_formats: {value: "nuon"}
                    param_options: {op: ["const", "ffill"]}}
     group_agg:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Aggregate a group_by record into a [{group, value}] summary table."
                    param_options: {op: ["avg", "sum", "min", "max", "count", "first"]}}
     transpose:     {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Transpose a table (rows become columns) or convert a record to a [{column, value}] table.", param_options: {}}
     values:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract the values of a record as a list (complement to columns).", param_options: {}}
     columns:       {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Extract the column names of a table or record as a list.", param_options: {}}
-    zip:           {category: "transform", color: "#3b82f6", wirable: ["right"],        agent_hint: "Zip two parallel lists into a table of records. Wire second list to --right port. --key_a / --key_b name the fields.", param_options: {}}
+    zip:           {category: "transform", color: "#3b82f6", wirable: ["right"],        agent_hint: "Zip two parallel lists into a table of records. Wire second list to --right port. --key_a / --key_b name the fields.", port_types: {right: "list"}, param_formats: {right: "nuon"}, param_options: {}}
     batch:         {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Split a list into chunks of --size elements. Returns a list of lists.", param_options: {}}
     window:        {category: "transform", color: "#3b82f6", wirable: [],               agent_hint: "Rolling N-row window aggregate over a table column. Adds a rolling result column."
                    param_options: {op: ["avg", "sum", "min", "max"]}}
@@ -69,7 +73,7 @@ export const PRIMITIVE_META = {
                    param_options: {}}
     try:           {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Try an expression, return fallback NUON on error.", param_options: {}}
     catch:         {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Catch errors and handle them with a handler expression.", param_options: {}}
-    for:           {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Iterate over a list, accumulate results. $in = current element, $acc built up in --init accumulator.", param_options: {}}
+    for:           {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Iterate over a list with an accumulator. In --expr: $in.elem is the current item, $in.acc is the running accumulator (seeded by --init). Returns the final accumulator.", param_options: {}}
     while:         {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "While loop with condition and body expressions. --max-iter prevents infinite loops.", param_options: {}}
     display:       {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Display the value (writes to stderr) and pass it through — safe to use mid-pipeline.", param_options: {}}
     file_out:      {category: "output",    color: "#22c55e", wirable: [],               agent_hint: "Write the value to a file. format: json, csv, text, or nuon"
@@ -117,8 +121,9 @@ export const PRIMITIVE_META = {
     row_apply:     {category: "compute",   color: "#eab308", wirable: [],               agent_hint: "Apply a Nu expression to each table row ($in = row record). --as_col adds result as new column; omit to replace the row. IMPORTANT: when using --as_col, the expression must return a scalar (string/number/bool) — returning the whole row record creates a nested column that breaks downstream filter comparisons.", param_options: {}}
     date_format:   {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Format a datetime as a string using a strftime pattern (default: %Y-%m-%d %H:%M:%S)", param_options: {}}
     into_datetime: {category: "datetime",  color: "#06b6d4", wirable: [],               agent_hint: "Parse a string into a datetime value — optionally provide a --fmt strftime pattern", param_options: {}}
-    if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: passes input through unchanged when condition is true; returns --fallback NUON value when false. There is no 'then' expression — to transform the true-branch value, add a downstream node."
-                   param_options: {op: ["==", "!=", ">", "<", "is-empty", "is-not-empty"]}}
+    if:            {category: "logic",     color: "#ec4899", wirable: [],               agent_hint: "Conditional gate: passes input through unchanged when the condition is true; returns --fallback (NUON) when false. Define the condition with --op (==, !=, >, <, is-empty, is-not-empty) and --value (comparison string). Use --column to test a specific field; omit to test the whole input. There is no 'then' expression — add downstream nodes to transform the true-branch value."
+                   param_options: {op: ["==", "!=", ">", "<", "is-empty", "is-not-empty"]}
+                   param_formats: {value: "plain", fallback: "nuon"}}
     # NOTE: conditional routing (if/else branching to different downstream nodes) is a
     # known gap — deferred. Requires graph-level routing, not a single primitive.
 }
@@ -505,7 +510,7 @@ export def "prim-http-post" [
 
 # Format a value as a string (json, nuon, csv, or text)
 export def "prim-to-json" []: any -> string { $in | to json }
-export def "prim-to-csv"  []: any -> string { $in | to csv }
+export def "prim-to-csv"  []: table -> string { $in | to csv }
 export def "prim-to-text" []: any -> string { $in | into string }
 export def "prim-to-nuon" []: any -> string { $in | to nuon }
 
@@ -821,9 +826,7 @@ export def "prim-wrap" []: any -> list {
 
 # ── Join primitive (multi-input) ──────────────────────────────────────────────
 
-# SQL-style join two tables on a shared column
-# SQL-style join two tables on a shared column
-# Wire a second table to the --right port for multi-input
+# SQL-style join two tables on a shared column. Wire a second table to the --right port for multi-input
 export def "prim-join" [
     --right: string = "[]"           # Right table as NUON (wire edge to this port)
     --on: string = ""                # Column name to join on
