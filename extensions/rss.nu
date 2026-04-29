@@ -7,7 +7,8 @@ export const RSS_PRIMITIVE_META = {
     rss_feed: {
         category: "rss"
         color: "#f97316"
-        wirable: []
+        wirable: ["url"]
+        required_params: ["url"]
         agent_hint: "Fetch items from any RSS 2.0 or Atom feed URL. Returns a table with title, link, published, summary, author. Works with Reuters, Yahoo Finance, MarketWatch, SEC press releases, HN, Seeking Alpha, any standard feed."
         param_options: {}
     }
@@ -45,11 +46,12 @@ export def "prim-rss-feed" [
     --url:   string = ""   # RSS or Atom feed URL
     --limit: string = "20" # Max number of items to return
 ]: nothing -> table {
-    if ($url | is-empty) {
+    let url_val = if ($url | str starts-with '"') { try { $url | from json } catch { $url } } else { $url }
+    if ($url_val | is-empty) {
         error make {msg: "provide --url as an RSS or Atom feed URL"}
     }
 
-    let doc = (http get -H {User-Agent: $RSS_UA} $url)
+    let doc = (http get -H {User-Agent: $RSS_UA} $url_val)
     let n   = ($limit | into int)
     let root_tag = (try { $doc | get tag? | default "" } catch { "" })
 
