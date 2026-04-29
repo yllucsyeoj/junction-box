@@ -6,7 +6,7 @@ export const REDDIT_PRIMITIVE_META = {
     reddit_subreddit: {
         category: "reddit"
         color: "#ff4500"
-        wirable: []
+        wirable: ["subreddit"]
         agent_hint: "Fetch posts from a Reddit subreddit. Returns a table with id, title, author, score, upvote_ratio, num_comments, url, permalink, selftext, created_utc, flair."
         param_options: {
             sort: ["hot", "new", "top", "rising"]
@@ -16,7 +16,7 @@ export const REDDIT_PRIMITIVE_META = {
     reddit_search: {
         category: "reddit"
         color: "#ff4500"
-        wirable: []
+        wirable: ["query"]
         required_params: ["query"]
         agent_hint: "Search posts on Reddit within a subreddit or site-wide (subreddit='all'). Returns a table with id, title, author, score, num_comments, url, permalink, selftext, created_utc, flair."
         param_options: {
@@ -76,12 +76,13 @@ export def "prim-reddit-subreddit" [
     --time:      string = "day"            # Time window (top only): hour day week month year all
     --limit:     string = "25"             # Max posts to return (1–100)
 ]: nothing -> table {
+    let subreddit_val = if ($subreddit | str starts-with '"') { try { $subreddit | from json } catch { $subreddit } } else { $subreddit }
     let n   = ($limit | into int)
     let cap = (if $n > 100 { 100 } else { $n })
     let url = if $sort == "top" {
-        $"($REDDIT_BASE)/r/($subreddit)/top.json?limit=($cap)&t=($time)"
+        $"($REDDIT_BASE)/r/($subreddit_val)/top.json?limit=($cap)&t=($time)"
     } else {
-        $"($REDDIT_BASE)/r/($subreddit)/($sort).json?limit=($cap)"
+        $"($REDDIT_BASE)/r/($subreddit_val)/($sort).json?limit=($cap)"
     }
     let doc = (http get -H {User-Agent: $REDDIT_UA} $url)
     $doc.data.children | each {|child| $child.data | reddit_post_row }
@@ -95,12 +96,13 @@ export def "prim-reddit-search" [
     --time:      string = "week"      # Time window: hour day week month year all
     --limit:     string = "25"        # Max posts to return (1–100)
 ]: nothing -> table {
-    if ($query | is-empty) {
+    let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
+    if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
     let n   = ($limit | into int)
     let cap = (if $n > 100 { 100 } else { $n })
-    let q   = ($query | url encode)
+    let q   = ($query_val | url encode)
     let url = if $subreddit == "all" {
         $"($REDDIT_BASE)/search.json?q=($q)&sort=($sort)&t=($time)&limit=($cap)"
     } else {
