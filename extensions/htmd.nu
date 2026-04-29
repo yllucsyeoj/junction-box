@@ -1,7 +1,9 @@
 export const HTMD_PRIMITIVE_META = {
-    htmd: {
+    web_htmd: {
         category: "web"
         color: "#3b82f6"
+        wirable: ["url"]
+        required_params: ["url"]
         agent_hint: "Convert HTML or a URL to Markdown and rich metadata. Use --main to extract only main content, --no-images to strip images, --no-links to strip links, --raw for only markdown string."
     }
 }
@@ -13,8 +15,9 @@ export def "prim-web-htmd" [
     --no-links                # Strip links from the output
     --raw                     # Return only the markdown string
     --user-agent: string = "" # Custom User-Agent
-]: nothing -> any {
-    let rawInput = if not ($url | is-empty) { $url } else { $in }
+]: nothing -> record {
+    let url_val  = if ($url | str starts-with '"') { $url | from json } else { $url }
+    let rawInput = if not ($url_val | is-empty) { $url_val } else { $in }
     let target = if ($rawInput | describe) == "string" {
         $rawInput
     } else if ($rawInput | describe) == "list" {
