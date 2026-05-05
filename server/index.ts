@@ -152,10 +152,12 @@ app.get('/', (c) => c.json({
         description: 'Patches can accept runtime inputs — build truly reusable pipeline functions',
         how_to_define: 'In your patch, use a const node with value "__param__:fieldname" as a placeholder',
         how_to_call: 'POST /exec {"alias": "my-patch", "params": {"fieldname": "value"}}',
+        save_format: 'POST /patch body: {alias, description, graph: {nodes: [...], edges: [...]}}  ← note: nodes/edges go inside "graph", not at top level',
         example: {
-          patch_node: '{"id": "t", "type": "const", "params": {"value": "__param__:ticker"}}',
+          save: 'POST /patch {"alias": "get-stock", "description": "Fetch stock price", "graph": {"nodes": [{"id": "t", "type": "const", "params": {"value": "__param__:ticker"}}, ...], "edges": [...]}}',
           call: 'POST /exec {"alias": "get-stock", "params": {"ticker": "MSFT"}}',
           result: 'The const node value becomes "MSFT" at runtime',
+          missing_params: 'Calling without params returns 422: {fatal: "Patch requires params: ticker"}',
         },
       },
     },
@@ -309,8 +311,8 @@ app.get('/', (c) => c.json({
       solution: 'If left table has "points" and right has "score", merged rows will have one column null. Rename columns to match before merging. Use the rename node upstream.',
     },
     {
-      issue: 'GET /runs/:run_id — result is at .result (top-level) AND .response.result',
-      solution: 'Use .result for the plain value. .response contains the full exec response object for debugging.',
+      issue: 'GET /runs/:run_id — accessing the result',
+      solution: 'Result is at .result (top-level shortcut) AND .response.result (full exec object). Use .result for the plain value; use .response for validation_errors, warnings, errors, etc.',
     },
   ],
 
@@ -330,7 +332,7 @@ app.get('/', (c) => c.json({
 app.get('/health', (c) => c.json({
   status: 'ok',
   uptime_ms: Date.now() - SERVER_START,
-  primitives: nodeSpec.length,
+  primitives: nodeSpec.filter(s => s.category !== 'example').length,
   data_dir: DATA_DIR,
   api: 'GET / for full endpoint manifest and quick-start guide',
 }))
@@ -350,7 +352,17 @@ app.get('/nodes', (c) => c.json(nodeSpec))
 // Optional: ?category=transform (or input, compute, datetime, logic, output, file, external)
 // ---------------------------------------------------------------------------
 app.get('/catalog', (c) => {
-  const categoryFilter = c.req.query('category')
+  const rawFilter = c.req.query('category')
+  const categoryFilter = rawFilter?.toLowerCase()
+  const validCategories = [...new Set(nodeSpec.filter(s => s.category !== 'example').map(s => s.category))]
+
+  if (categoryFilter && !validCategories.includes(categoryFilter)) {
+    return c.json({
+      nodes: [],
+      hint: `Unknown category "${rawFilter}". Valid categories: ${validCategories.sort().join(', ')}.`,
+    }, 400)
+  }
+
   const catalog = nodeSpec
     .filter(s => s.category !== 'example')  // template artifacts, not real nodes
     .filter(s => !categoryFilter || s.category === categoryFilter)
@@ -694,6 +706,15 @@ app.post('/exec', async (c) => {
   // Default edges to [] — a single const node with no edges is a valid (if trivial) pipeline
   if (!Array.isArray((graph as any).edges)) {
     (graph as any).edges = []
+  }
+
+  // Empty graph — nothing to execute
+  if ((graph as any).nodes.length === 0) {
+    return c.json({
+      status: 'error', run_id,
+      fatal: 'Graph has no nodes. Add at least one node to execute.',
+      validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
+    }, 400)
   }
 
   // Detect unresolved __param__ placeholders — prevents silent literal-string queries

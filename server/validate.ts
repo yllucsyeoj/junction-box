@@ -95,7 +95,9 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     }
 
     // 2. Node expects piped input but has no incoming input edge
-    if (spec.input_type !== 'nothing') {
+    // Skip this check when the graph has edges missing port fields — those will be reported separately.
+    const hasMissingPortEdges = graph.edges.some(e => !e.from_port || !e.to_port)
+    if (spec.input_type !== 'nothing' && !hasMissingPortEdges) {
       const hasInputEdge = graph.edges.some(e => e.to === node.id && e.to_port === 'input')
       if (!hasInputEdge) {
         errors.push({
@@ -175,6 +177,19 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
   }
 
   for (const edge of graph.edges) {
+    // 3b. Missing from_port or to_port — emit one clear error instead of cascading "undefined" errors
+    if (!edge.from_port || !edge.to_port) {
+      const missing = [!edge.from_port && 'from_port', !edge.to_port && 'to_port'].filter(Boolean).join(' and ')
+      errors.push({
+        node_id: edge.to ?? edge.from ?? '?',
+        type: nodeMap.get(edge.to ?? '')?.type ?? nodeMap.get(edge.from ?? '')?.type ?? '?',
+        error_type: 'invalid_port',
+        message: `Edge${edge.id !== undefined ? ` "${edge.id}"` : ''} is missing ${missing}. Edges require explicit port names.`,
+        suggestion: `Add ${missing} to the edge: from_port: "output", to_port: "input" (or the param port name for wirable params).`,
+      })
+      continue
+    }
+
     // 4. Edge references a node that doesn't exist
     if (!nodeMap.has(edge.from)) {
       errors.push({
@@ -266,7 +281,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
             type: toNode.type,
             error_type: 'type_mismatch',
             message: `Node "${edge.from}" (${fromSpec.name}) outputs "${outType}" but "${edge.to}" (${toSpec.name}) expects "${inType}".`,
-            suggestion: `Add a type conversion node between them (e.g. type_cast, from_string, col_to_list).`,
+            suggestion: `Output type "${outType}" is not compatible with input type "${inType}". To convert: record→table use "wrap" then flatten; string→number use "from_string"; number→string use "str-concat" with empty prefix; table→list use "col_to_list".`,
           })
         }
       }
@@ -283,7 +298,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
         node_id: node.id,
         type: node.type,
         warning_type: 'orphaned_node',
-        message: `Node "${node.id}" (${node.type}) is a source node with no outgoing edges — it will run but its output will be discarded.`,
+        message: `Node "${node.id}" (${node.type}) is a source node with no outgoing edges — it will be skipped (output has nowhere to go).`,
         suggestion: `Connect it to a downstream node, or remove it if unused.`,
       })
     }

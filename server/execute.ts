@@ -141,6 +141,18 @@ export async function runPipeline(
     const node = graph.nodes.find(n => n.id === nodeId)!
     const nodeStart = Date.now()
 
+    // Skip orphaned source nodes — source nodes (input_type: nothing) with no outgoing edges
+    // have nowhere to send their output; running them wastes external API quota.
+    const nodeSpecEntry = specMap.get(node.type)
+    const isSource = nodeSpecEntry?.input_type === 'nothing'
+    const hasOutgoing = graph.edges.some(e => e.from === nodeId)
+    if (isSource && !hasOutgoing) {
+      emit({ node_id: nodeId, status: 'skipped', reason: `Orphaned source node — no outgoing edges, output would be discarded.` })
+      outputs.set(nodeId, 'null')
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'skipped', duration_ms: Date.now() - nodeStart })
+      continue
+    }
+
     // If any upstream dependency failed, skip this node rather than running it with null input
     const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
     if (inputEdge && failed.has(inputEdge.from)) {

@@ -29,18 +29,18 @@ Each dimension has three depth levels. Focus your effort on the **Next** column 
 
 | Dimension | L1 | L2 | L3 | Next |
 |---|---|---|---|---|
-| Discovery | ✓ | — | — | L2 |
-| Pipeline construction | ✓ | — | — | L2 |
-| Validation | ✓ | ✓ | — | L3 |
-| Error response consistency | ✓ | — | — | L2 |
-| Persistence (patches + runs) | ✓ | ✓ | — | L3 |
-| Type system / wiring | ✓ | — | — | L2 |
-| Node categories — data sources | ✓ | — | — | L2 |
-| Parameterized patches | ✓ | ✓ | — | L3 |
-| Token efficiency | ✓ | — | — | L2 |
-| Async / reference mode | ✓ | — | — | L2 |
-| Manifest accuracy | ✓ | — | — | L2 |
-| Schema consistency | ✓ | — | — | L2 |
+| Discovery | ✓ | ✓ | — | L3 |
+| Pipeline construction | ✓ | ✓ | — | L3 |
+| Validation | ✓ | ✓ | ✓ | done |
+| Error response consistency | ✓ | ✓ | — | L3 |
+| Persistence (patches + runs) | ✓ | ✓ | ✓ | done |
+| Type system / wiring | ✓ | ✓ | — | L3 |
+| Node categories — data sources | ✓ | ✓ | — | L3 |
+| Parameterized patches | ✓ | ✓ | ✓ | done |
+| Token efficiency | ✓ | ✓ | — | L3 |
+| Async / reference mode | ✓ | ✓ | — | L3 |
+| Manifest accuracy | ✓ | ✓ | — | L3 |
+| Schema consistency | ✓ | ✓ | — | L3 |
 
 **What each level means:**
 
@@ -123,5 +123,5 @@ Junction Box is a node-graph execution engine. Define a pipeline as `{nodes, edg
 - **Validation (422) vs runtime (500)** — structural errors (bad params, wrong types, disconnected nodes) are caught pre-run with actionable messages. Network failures and expression errors are 500s at runtime.
 - **`POST /parse-nuon`** accepts either raw NUON text (`Content-Type: text/plain`) or JSON `{"text": "..."}` (`Content-Type: application/json`) and returns the parsed JSON value.
 - **`position` fields in nodes are ignored** — omit them to save tokens.
-- **Parameterized patches require all params** — if a patch has `__param__:name` placeholders and you call it without params, the API returns 422 with a message naming the missing params.
-- **`GET /runs/:run_id` exposes result at top level** — use `.result` directly; `.response.result` also works but is the full exec object.
+- **Parameterized patches require all params** — if a patch has `__param__:name` placeholders and you call it without params (or partial params), the API returns 422 with `fatal: "Patch requires params: name"`. Passing wrong type coerces to string silently.
+- **`GET /runs/:run_id` exposes result at `.result` (top-level)** — also available at `.response.result` for the full exec object. Top-level `.result` is the shortcut.
