@@ -778,7 +778,9 @@ app.post('/exec', async (c) => {
   logRun({ type: 'exec', run_id, alias, status: resp.status, node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 }, nodeRecords)
 
   // Use correct HTTP status: validation/runtime graph errors are client errors, not server errors
+  const hasRuntimeErrors = resp.errors && Object.keys(resp.errors).length > 0
   const httpStatus = resp.validation_errors?.length > 0 ? 422
+    : hasRuntimeErrors ? 422
     : resp.fatal ? 400
     : 200
   return c.json(resp, httpStatus)

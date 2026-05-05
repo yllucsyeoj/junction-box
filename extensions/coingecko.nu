@@ -55,7 +55,7 @@ export def "prim-coingecko-simple" [
     let url = $"https://api.coingecko.com/api/v3/simple/price?ids=($ids_val)&vs_currencies=($vs)&include_market_cap=($include_market_cap)&include_24hr_vol=($include_24h_vol)&include_24hr_change=true"
     let raw = (http get -H {User-Agent: $CG_UA} $url)
     let coin_ids = ($ids_val | split row "," | each {|id| $id | str trim })
-    let result = {}
+    mut result = {}
     for $cid in $coin_ids {
         if ($cid in $raw) {
             let coin_data = ($raw | get $cid)
@@ -72,7 +72,7 @@ export def "prim-coingecko-simple" [
                 let entry = ($entry | merge { vol_24h: (try { $coin_data | get $vol_key } catch { 0.0 }) })
             }
             let entry = ($entry | merge { change_24h: (try { $coin_data | get $"($vs)_24h_change" } catch { 0.0 }) })
-            let result = ($result | merge {($cid): $entry})
+            $result = ($result | merge {($cid): $entry})
         }
     }
     $result

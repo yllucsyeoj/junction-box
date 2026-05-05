@@ -51,7 +51,7 @@ export def "prim-rss-feed" [
         error make {msg: "provide --url as an RSS or Atom feed URL"}
     }
 
-    let doc = (http get -H {User-Agent: $RSS_UA} $url_val)
+    let doc = (http get -H {User-Agent: $RSS_UA} $url_val | from xml)
     let n   = ($limit | into int)
     let root_tag = (try { $doc | get tag? | default "" } catch { "" })
 

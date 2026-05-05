@@ -60,6 +60,33 @@ const NODE_ERROR_HINTS: Record<string, Record<string, string>> = {
   },
 }
 
+// Extract the innermost meaningful error message from a nested Nu error.
+// Nu errors are often wrapped multiple times (e.g. each -> subprocess -> actual error).
+function extractCoreMessage(raw: string): string {
+  // Look for the deepest "x <message>" line — the actual human-readable error
+  const lines = raw.split('\n')
+  let best = ''
+  for (const line of lines) {
+    const m = line.match(/^\s*x\s+(.+)$/)
+    if (m) {
+      const msg = m[1].trim()
+      // Prefer deeper/more specific messages over generic wrappers
+      if (msg.length > best.length && !msg.includes('Eval block failed') && !msg.includes('each expression failed')) {
+        best = msg
+      }
+    }
+  }
+  // Fallback: if no "x " lines found, clean up the raw string
+  if (!best) {
+    best = raw
+      .replace(/Error:\s*nu::[a-z_:]+/g, '')
+      .replace(/\s*,?-\[.*?:\d+:\d+\][\s\S]*?`----/g, '')
+      .replace(/\n+/g, ' ')
+      .trim()
+  }
+  return best || raw.trim()
+}
+
 // Strip internal file/line references from Nu error output and return a clean message.
 function normalizeNuError(
   raw: string,
@@ -67,26 +94,22 @@ function normalizeNuError(
   params: Record<string, unknown>,
   expectedType?: string
 ): { message: string; error_type: string; expected_type?: string; got_type?: string } {
-  // Remove Nu source location lines like ",-[primitives.nu:209:5]" and surrounding context
-  const stripped = raw
-    .replace(/\s*,?-\[.*?:\d+:\d+\][\s\S]*?`----/g, '')   // strip source context blocks
-    .replace(/Error:\s*nu::[a-z_:]+\n/g, '')                // strip internal error type header
-    .replace(/  x /g, '')                                    // strip Nu "x" prefix
-    .replace(/\n+/g, ' ')
-    .trim()
+  const core = extractCoreMessage(raw)
 
   // Classify error type from Nu message patterns
   let error_type = 'runtime'
-  if (raw.includes('pipeline_mismatch') || raw.includes('cant_convert') || raw.includes('type_mismatch')) {
+  if (raw.includes('pipeline_mismatch') || raw.includes('cant_convert') || raw.includes('type_mismatch') || raw.includes('only string input data')) {
     error_type = 'type_mismatch'
-  } else if (raw.includes('column_not_found') || raw.includes('CantFindColumn') || raw.includes('cannot find column')) {
+  } else if (raw.includes('column_not_found') || raw.includes('CantFindColumn') || raw.includes('cannot find column') || raw.includes('Cannot find column')) {
     error_type = 'missing_column'
-  } else if (raw.includes('expected_keyword') || raw.includes('parser')) {
+  } else if (raw.includes('expected_keyword') || raw.includes('parser') || raw.includes('error when loading nuon text')) {
     error_type = 'syntax'
   } else if (raw.includes('NotFound') || raw.includes('not found')) {
     error_type = 'not_found'
   } else if (raw.includes('Network failure') || raw.includes('os error 111') || raw.includes('Connection refused') || raw.includes('unable to connect')) {
     error_type = 'network_error'
+  } else if (raw.includes('Division by zero') || raw.includes('division_by_zero')) {
+    error_type = 'arithmetic'
   }
 
   // Extract got_type for type_mismatch errors
@@ -96,7 +119,7 @@ function normalizeNuError(
   const paramHints: string[] = []
   const paramsObj = params ?? {}
   for (const [k, v] of Object.entries(paramsObj)) {
-    if (stripped.toLowerCase().includes(String(v).toLowerCase().slice(0, 6))) {
+    if (core.toLowerCase().includes(String(v).toLowerCase().slice(0, 6))) {
       paramHints.push(k)
     }
   }
@@ -106,7 +129,7 @@ function normalizeNuError(
   const nodeHint = NODE_ERROR_HINTS[nodeType]?.[error_type] ?? ''
 
   // Build improved message with all available context
-  let message = stripped || raw.trim()
+  let message = core
   if (got_type) message += ` (got: ${got_type})`
   if (expectedType && expectedType !== 'any') message += ` (expected: ${expectedType})`
   if (nodeHint) message += ` — ${nodeHint}`
@@ -209,7 +232,8 @@ export async function runPipeline(
     const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
     // All nodes serialize to JSON — clean for API consumers and jq-able directly.
     const serialize = '| to json'
-    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.msg)" | to json }`
+    // Use $e.json to capture the full nested error structure, not just the outer $e.msg
+    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.json)" | to json }`
 
     const proc = Bun.spawnSync(
       ['nu', '-c', nuScript],
@@ -235,7 +259,20 @@ export async function runPipeline(
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
     } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
       // Runtime error caught by try/catch wrapper
-      const raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+      // $e.json is a JSON string inside a JSON string, so parse twice
+      let raw: string
+      try {
+        const outer = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+        const errObj = JSON.parse(outer)
+        // Recursively find the deepest inner error message
+        let inner = errObj
+        while (inner.inner && inner.inner.length > 0) {
+          inner = inner.inner[0]
+        }
+        raw = inner.msg || errObj.msg || outer
+      } catch {
+        raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+      }
       const { message, error_type, expected_type, got_type } = normalizeNuError(raw, node.type, node.params, expectedType)
       emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
       outputs.set(nodeId, 'null')

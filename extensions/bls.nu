@@ -65,22 +65,29 @@ export def "prim-bls-series" [
             error make {msg: "Multi-series BLS queries require BLS_API_KEY. Register free at data.bls.gov/registrationEngine"}
         }
         let payload = {
-            series_id: $ids,
-            start_year: $start,
-            end_year:   $end,
-            api_key: $key
+            seriesid: $ids,
+            startyear: ($start | into string),
+            endyear:   ($end | into string),
+            registrationkey: $key
         }
         let raw = (http post
             -H {Content-Type: "application/json"}
             $"https://api.bls.gov/publicAPI/v2/timeseries/data/"
             ($payload | to json))
+        let api_status = (try { $raw.status } catch { "" })
+        if $api_status != "REQUEST_SUCCEEDED" {
+            error make {msg: $"BLS API error: ($api_status) — ($raw.message? | default "unknown")"}
+        }
         let results = (try { $raw.Results.series } catch { [] })
-        let all_rows = []
+        if ($results | is-empty) {
+            error make {msg: "BLS API returned no data. Check series IDs and API key validity."}
+        }
+        mut all_rows = []
         for $series in $results {
             let sid  = (try { $series.seriesID } catch { "" })
             let sdata = (try { $series.data } catch { [] })
             let new_rows = ($sdata | each {|d| bls_parse_row $sid $d })
-            let all_rows = ($all_rows | append $new_rows)
+            $all_rows = ($all_rows | append $new_rows)
         }
         $all_rows
     }

@@ -204,11 +204,7 @@ export def "prim-map" [
     --column: string = ""        # Column name to add or update
     --value: string = "null"     # NUON literal for the new value
 ]: table -> table {
-    if ($value | str starts-with '"') {
-        upsert $column {|_| (try { $value | from json } catch { $value } | from nuon)}
-    } else {
-        upsert $column {|_| ($value | from nuon)}
-    }
+    upsert $column {|_| (try { $value | from nuon } catch { $value })}
 }
 
 # Keep only the specified columns
@@ -625,11 +621,7 @@ export def "prim-update" [
     --field: string = ""             # Field name to update
     --value: string = "null"         # NUON replacement value
 ]: any -> any {
-    if ($value | str starts-with '"') {
-        update $field (try { $value | from json } catch { $value } | from nuon)
-    } else {
-        update $field ($value | from nuon)
-    }
+    update $field (try { $value | from nuon } catch { $value })
 }
 
 # ── Additional collection operation primitives ────────────────────────────────
@@ -738,7 +730,8 @@ export def "prim-if" [
         "is-not-empty" => { not ($subject | is-empty) }
         _ => { error make {msg: $"Unknown op: ($op). Valid: ==, !=, >, <, is-empty, is-not-empty"} }
     }
-    if $passes { $v } else { $fallback | from nuon }
+    let fallback_val = try { $fallback | from nuon } catch { $fallback }
+    if $passes { $v } else { $fallback_val }
 }
 
 # ── Each / loop primitive ─────────────────────────────────────────────────────
@@ -799,14 +792,10 @@ export def "prim-url-decode" []: string -> string {
 
 # Append a NUON list or single value to the input list
 export def "prim-append" [
-    --items: string = "[]"           # NUON list or value to append (wire an edge to this port for multi-input)
+    --items: string = "[]"           # NUON list or value to append
 ]: any -> list {
     let input = $in
-    let parsed = if (($items | from json | describe) | str starts-with 'list') {
-        ($items | from json | each {|v| $v | from nuon} | flatten)
-    } else {
-        ($items | from nuon)
-    }
+    let parsed = ($items | from nuon)
     let desc = ($parsed | describe)
     if ($desc | str starts-with 'list') or ($desc | str starts-with 'table') {
         $input | append $parsed

@@ -29,6 +29,21 @@ function typesCompatible(inputType: string, outputType: string): boolean {
   return (COMPAT[normIn] ?? ['any']).includes(normOut)
 }
 
+// Infer the actual output type of a `const` node from its `value` param.
+// Matches the logic in prim-const: try NUON parse, fall back to raw string.
+function inferConstType(value: unknown): string {
+  const s = String(value).trim()
+  if (s === 'true' || s === 'false') return 'bool'
+  if (s === 'null') return 'nothing'
+  if (s.startsWith('"') || s.startsWith("'")) return 'string'
+  if (s.startsWith('[')) return 'list'
+  if (s.startsWith('{')) return 'record'
+  if (/^-?\d+$/.test(s)) return 'int'
+  if (/^-?\d+\.\d+([eE][+-]?\d+)?$/.test(s)) return 'float'
+  // Bare word that isn't a NUON literal → falls back to raw string in prim-const
+  return 'string'
+}
+
 // Levenshtein distance for "did you mean?" suggestions
 function editDistance(a: string, b: string): number {
   const m = a.length, n = b.length
@@ -271,9 +286,14 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
 
     // 7. Type mismatch between connected nodes (best-effort, skipped if type is "any")
     if (edge.to_port === 'input' && nodeMap.has(edge.from)) {
-      const fromSpec = specMap.get(nodeMap.get(edge.from)!.type)
+      const fromNode = nodeMap.get(edge.from)!
+      const fromSpec = specMap.get(fromNode.type)
       if (fromSpec && toSpec) {
-        const outType = fromSpec.output_type
+        // For `const` nodes, infer the actual output type from the value param
+        // instead of using the generic "any" output type.
+        const outType = fromNode.type === 'const'
+          ? inferConstType(fromNode.params.value)
+          : fromSpec.output_type
         const inType = toSpec.input_type
         if (!typesCompatible(inType, outType)) {
           errors.push({
