@@ -102,7 +102,21 @@ export function getPatch(alias: string): { alias: string; description: string; g
   };
 }
 
-export function listPatches(): Array<{ alias: string; description: string; node_types: string[]; node_count: number; created_at: string }> {
+export function extractRequiredParams(graph: unknown): string[] {
+  const g = parseGraph(graph);
+  const params: string[] = [];
+  for (const node of g.nodes) {
+    if (node.type !== 'const') continue;
+    const val = (node.params as any)?.value;
+    if (typeof val === 'string') {
+      const m = val.match(/^__param__:(.+)$/);
+      if (m) params.push(m[1]);
+    }
+  }
+  return params;
+}
+
+export function listPatches(): Array<{ alias: string; description: string; node_types: string[]; node_count: number; required_params: string[]; created_at: string }> {
   const db = getDb();
   const rows = db.prepare('SELECT alias, description, graph, created_at FROM patches ORDER BY created_at DESC').all() as Array<{ alias: string; description: string; graph: string; created_at: string }>;
   return rows.map(row => ({
@@ -110,6 +124,7 @@ export function listPatches(): Array<{ alias: string; description: string; node_
     description: row.description,
     node_types: extractNodeTypes(row.graph),
     node_count: countNodes(row.graph),
+    required_params: extractRequiredParams(row.graph),
     created_at: row.created_at,
   }));
 }

@@ -185,6 +185,22 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
         suggestion: `Check that the "from" node id is correct.`,
       })
     }
+
+    // 4b. Validate from_port against declared output ports
+    const fromNode = nodeMap.get(edge.from)
+    const fromSpec = fromNode ? specMap.get(fromNode.type) : null
+    if (fromSpec && edge.from_port) {
+      const validOutPorts = fromSpec.ports.outputs?.map(p => p.name) ?? ['output']
+      if (!validOutPorts.includes(edge.from_port)) {
+        errors.push({
+          node_id: edge.from,
+          type: fromNode!.type,
+          error_type: 'invalid_port',
+          message: `Port "${edge.from_port}" does not exist as an output on node "${edge.from}" (${fromNode!.type}).`,
+          suggestion: `Valid output ports: ${validOutPorts.map(p => `"${p}"`).join(', ')}.`,
+        })
+      }
+    }
     if (!nodeMap.has(edge.to)) {
       errors.push({
         node_id: edge.from,

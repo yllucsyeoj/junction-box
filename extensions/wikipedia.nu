@@ -182,10 +182,11 @@ export def "prim-wiki-search" [
 export def "prim-wiki-summary" [
     --title: string = ""  # Wikipedia article title (e.g. "Nvidia") — wirable
 ]: nothing -> record {
-    if ($title | is-empty) {
+    let title_val = if ($title | str starts-with '"') { try { $title | from json } catch { $title } } else { $title }
+    if ($title_val | is-empty) {
         error make {msg: "provide --title as the Wikipedia article title"}
     }
-    let t   = ($title | url encode)
+    let t   = ($title_val | url encode)
     let url = $"($WIKI_REST)/page/summary/($t)"
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     {
@@ -199,10 +200,11 @@ export def "prim-wiki-summary" [
 export def "prim-wiki-sections" [
     --title: string = ""  # Wikipedia article title — wirable
 ]: nothing -> table {
-    if ($title | is-empty) {
+    let title_val = if ($title | str starts-with '"') { try { $title | from json } catch { $title } } else { $title }
+    if ($title_val | is-empty) {
         error make {msg: "provide --title as the Wikipedia article title"}
     }
-    let t   = ($title | url encode)
+    let t   = ($title_val | url encode)
     let url = $"($WIKI_API)?action=parse&page=($t)&prop=sections&format=json"
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.parse.sections | each {|s|
@@ -219,10 +221,11 @@ export def "prim-wiki-section" [
     --title:   string = ""  # Wikipedia article title — wirable
     --section: string = "0" # Section index from wiki_sections (0 = lead/intro)
 ]: nothing -> string {
-    if ($title | is-empty) {
+    let title_val = if ($title | str starts-with '"') { try { $title | from json } catch { $title } } else { $title }
+    if ($title_val | is-empty) {
         error make {msg: "provide --title as the Wikipedia article title"}
     }
-    let t   = ($title | url encode)
+    let t   = ($title_val | url encode)
     let url = $"($WIKI_API)?action=parse&page=($t)&prop=wikitext&section=($section | into int)&format=json"
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.parse.wikitext | values | first | wiki_text_clean
@@ -233,10 +236,11 @@ export def "prim-wiki-table" [
     --title:   string = ""  # Wikipedia article title — wirable
     --section: string = "1" # Section index from wiki_sections
 ]: nothing -> table {
-    if ($title | is-empty) {
+    let title_val = if ($title | str starts-with '"') { try { $title | from json } catch { $title } } else { $title }
+    if ($title_val | is-empty) {
         error make {msg: "provide --title as the Wikipedia article title"}
     }
-    let t   = ($title | url encode)
+    let t   = ($title_val | url encode)
     let url = $"($WIKI_API)?action=parse&page=($t)&prop=wikitext&section=($section | into int)&format=json"
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.parse.wikitext | values | first | wiki_parse_table

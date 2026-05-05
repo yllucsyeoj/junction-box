@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns } from './db'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, extractRequiredParams } from './db'
 import { loadSpec } from './spec'
 import { type NodeRunRecord } from './execute'
 import { validateGraph } from './validate'
@@ -100,6 +100,19 @@ function injectParams(graph: GraphForInject, params: Record<string, unknown>): G
   return { ...graph, nodes }
 }
 
+function detectMissingParams(graph: GraphForInject): string[] {
+  const missing: string[] = []
+  for (const node of graph.nodes) {
+    if (node.type !== 'const') continue
+    const val = node.params.value
+    if (typeof val === 'string') {
+      const m = val.match(/^__param__:(.+)$/)
+      if (m) missing.push(m[1])
+    }
+  }
+  return missing
+}
+
 // ---------------------------------------------------------------------------
 // GET / — comprehensive LLM manual
 // After ONE call, an LLM should know how to construct any pipeline.
@@ -125,7 +138,7 @@ app.get('/', (c) => c.json({
     reference_mode: {
       description: 'Execute pipelines asynchronously and retrieve results later',
       usage: 'POST /exec with header X-Reference: true → returns {status: "pending", run_id: "..."} immediately',
-      retrieval: 'GET /runs/:run_id → fetch the stored result at any time',
+      retrieval: 'GET /runs/:run_id → result at .result (top-level) and .response.result (full object)',
       example: {
         step_1: { action: 'POST /exec with X-Reference: true', body: '{nodes: [...], edges: [...]}' },
         step_1_result: 'Returns {status: "pending", run_id: "mok4vwll-tv031"}',
@@ -287,6 +300,18 @@ app.get('/', (c) => c.json({
       issue: 'Need to retrieve a previous result without re-running',
       solution: 'Use reference mode: POST /exec with X-Reference: true header → returns run_id immediately. Then GET /runs/:run_id to fetch the stored result at any time. All runs are persisted in SQLite.',
     },
+    {
+      issue: 'if node does not create true branches — fallback flows into downstream nodes',
+      solution: 'The if node substitutes the fallback value when false, but downstream nodes still run on both branches. Use it only for value substitution, not for routing to different processing paths.',
+    },
+    {
+      issue: 'table-concat with mismatched column names creates sparse rows silently',
+      solution: 'If left table has "points" and right has "score", merged rows will have one column null. Rename columns to match before merging. Use the rename node upstream.',
+    },
+    {
+      issue: 'GET /runs/:run_id — result is at .result (top-level) AND .response.result',
+      solution: 'Use .result for the plain value. .response contains the full exec response object for debugging.',
+    },
   ],
 
   // ── Value Formats ─────────────────────────────────────────────────────────
@@ -412,7 +437,7 @@ app.post('/run', async (c) => {
 app.get('/defs/:type', (c) => {
   const typeName = c.req.param('type')
   const spec = nodeSpec.find(s => s.name === typeName)
-  if (!spec) return c.json({ error: `Unknown node type: "${typeName}"` }, 404)
+  if (!spec) return c.json({ status: 'error', error: `Unknown node type: "${typeName}"` }, 404)
   const example = EXAMPLES[typeName] ?? null
   // Extract wirable params into a separate field with type info and descriptions
   const wirableParams = spec.ports.inputs
@@ -666,6 +691,21 @@ app.post('/exec', async (c) => {
     }, 400)
   }
 
+  // Default edges to [] — a single const node with no edges is a valid (if trivial) pipeline
+  if (!Array.isArray((graph as any).edges)) {
+    (graph as any).edges = []
+  }
+
+  // Detect unresolved __param__ placeholders — prevents silent literal-string queries
+  const missingParams = detectMissingParams(graph as GraphForInject)
+  if (missingParams.length > 0) {
+    return c.json({
+      status: 'error', run_id,
+      fatal: `${alias ? `Patch "${alias}"` : 'Graph'} requires params: ${missingParams.join(', ')}. Pass them as {"alias": "...", "params": {"${missingParams[0]}": "value"}}.`,
+      validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
+    }, 422)
+  }
+
   const referenceMode = c.req.header('x-reference') === 'true' || c.req.query('reference') === 'true'
 
   if (referenceMode) {
@@ -765,6 +805,7 @@ app.get('/patch/:alias', (c) => {
   return c.json({
     alias: patch.alias,
     description: patch.description,
+    required_params: extractRequiredParams(patch.graph),
     graph: patch.graph,
     created_at: patch.created_at,
     _manifest: {
@@ -835,6 +876,7 @@ app.get('/runs/:run_id', (c) => {
     status: run.status,
     graph: run.graph,
     created_at: run.created_at,
+    result: (response?.response as any)?.result ?? null,
     response: response?.response ?? null,
     _manifest: {
       run_again: run.patch_alias ? `POST /exec {"alias": "${run.patch_alias}"}` : 'POST /exec with graph body',
