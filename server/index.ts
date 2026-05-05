@@ -204,6 +204,13 @@ app.get('/', (c) => c.json({
       'Source nodes (const, fetch, date-now, env) have no incoming edge',
       'Terminal nodes (return) should be the rightmost',
     ],
+    pre_exec_checklist: [
+      'Every edge has both from_port and to_port set explicitly — omitting either causes a validation error',
+      'Node types are exact — use GET /catalog to confirm the name (e.g. "select" not "select-columns")',
+      'filter.op is one of: ==, !=, >, <, contains — not "eq" or "equals"',
+      'Source nodes (input_type: nothing) have no incoming edge; every other node must have one',
+      'Parameterized patches: always pass all __param__ keys in "params" or you get a 422',
+    ],
   },
 
   // ── Node Categories ────────────────────────────────────────────────────────
