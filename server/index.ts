@@ -69,6 +69,38 @@ function nuonToGraph(nuonText: string): { ok: true; graph: unknown } | { ok: fal
 }
 
 // ---------------------------------------------------------------------------
+// Utility: inject runtime params into a graph's const nodes.
+// Any const node whose value matches "__param__:fieldname" will have its
+// value replaced with the corresponding runtime param value.
+//
+// Example:
+//   Patch has: {id: "t", type: "const", params: {value: "__param__:ticker"}}
+//   Call with: POST /exec {alias: "...", params: {ticker: "MSFT"}}
+//   Result:    node value becomes "MSFT"
+// ---------------------------------------------------------------------------
+interface GraphForInject {
+  nodes: Array<{ id: string; type: string; params: Record<string, unknown> }>
+  edges: unknown[]
+}
+
+function injectParams(graph: GraphForInject, params: Record<string, unknown>): GraphForInject {
+  const nodes = graph.nodes.map(node => {
+    if (node.type !== 'const') return node
+    const val = node.params.value
+    if (typeof val !== 'string') return node
+    const match = val.match(/^__param__:(.+)$/)
+    if (!match) return node
+    const key = match[1]
+    if (!(key in params)) return node
+    // Wrap string values in NUON quotes; other types pass through as-is
+    const raw = params[key]
+    const nuonValue = typeof raw === 'string' ? `"${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : String(raw)
+    return { ...node, params: { ...node.params, value: nuonValue } }
+  })
+  return { ...graph, nodes }
+}
+
+// ---------------------------------------------------------------------------
 // GET / — comprehensive LLM manual
 // After ONE call, an LLM should know how to construct any pipeline.
 // ---------------------------------------------------------------------------
@@ -79,7 +111,7 @@ app.get('/', (c) => c.json({
 
   // ── Quick Start ──────────────────────────────────────────────────────────
   quick_start: {
-    step_1: { action: 'GET /catalog', purpose: `Browse all ${nodeSpec.length} node types by name, category, and hint — token-efficient (~15KB). Filter with ?category=transform` },
+    step_1: { action: 'GET /catalog', purpose: `Browse all ${nodeSpec.filter(s => s.category !== 'example').length} node types by name, category, hint, and wirable_params — token-efficient. Filter with ?category=transform` },
     step_2: { action: 'GET /defs/:type', purpose: 'Get full schema + example for a specific node type' },
     step_3: { action: 'GET /patterns', purpose: 'Copy pre-built common pipeline patterns' },
     step_4: { action: 'POST /exec with {nodes, edges}', purpose: 'Run a pipeline, get {result} back. Add ?outputs=full for per-node debug outputs.' },
@@ -103,6 +135,16 @@ app.get('/', (c) => c.json({
     patches: {
       description: 'Named graphs stored in SQLite, retrieved by alias',
       endpoints: ['POST /patch', 'GET /patches', 'GET /patch/:alias', 'DELETE /patch/:alias'],
+      parameterized_patches: {
+        description: 'Patches can accept runtime inputs — build truly reusable pipeline functions',
+        how_to_define: 'In your patch, use a const node with value "__param__:fieldname" as a placeholder',
+        how_to_call: 'POST /exec {"alias": "my-patch", "params": {"fieldname": "value"}}',
+        example: {
+          patch_node: '{"id": "t", "type": "const", "params": {"value": "__param__:ticker"}}',
+          call: 'POST /exec {"alias": "get-stock", "params": {"ticker": "MSFT"}}',
+          result: 'The const node value becomes "MSFT" at runtime',
+        },
+      },
     },
     runs: {
       description: 'All exec executions are recorded with full response data',
@@ -181,13 +223,12 @@ app.get('/', (c) => c.json({
   endpoints: {
     'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
-    'GET /catalog': `Token-efficient node index (${nodeSpec.length} nodes) — name, category, types, hint only (~32KB). Supports ?category= filter. Start here.`,
+    'GET /catalog': `Token-efficient node index (${nodeSpec.filter(s => s.category !== 'example').length} nodes) — name, category, types, hint, wirable_params. Supports ?category= filter. Start here.`,
     'GET /catalog?category=X': 'Filter catalog by category. Core: input, transform, compute, datetime, logic, output, file, external. Data sources: hn, reddit, wikipedia, youtube, github, rss, web, market, coingecko, feargreed, sec, fred, bls, template.',
-    'GET /defs': `All ${nodeSpec.length} node types — WARNING: ~113KB. Use GET /defs/:type for a single node instead.`,
-    'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details',
+    'GET /defs': `All node types — WARNING: large. Use GET /defs/:type for a single node instead.`,
+    'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details. Returns name, type (same value), params, ports, wirable_params, example.',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
-    'GET /nodes': 'Raw node spec (no examples)',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch. Add X-Reference: true header for async mode (returns run_id immediately). Add ?outputs=full for per-node debug outputs.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs.',
     'POST /exec (reference mode)': 'Add header X-Reference: true → returns {status: "pending", run_id: "..."} immediately. Execute GET /runs/:run_id later to fetch result.',
     'POST /patch': 'Save a validated graph: {alias, description, graph}',
     'GET /patches': 'List all saved patches (stored in SQLite)',
@@ -195,7 +236,7 @@ app.get('/', (c) => c.json({
     'DELETE /patch/:alias': 'Delete a saved patch',
     'GET /visualise/:alias': 'Render a saved patch as an ASCII flowchart diagram — useful for visualizing dataflow pipelines before running',
     'GET /runs': 'List all runs with optional filters: ?patch_alias=X&limit=50&offset=0 (all runs stored in SQLite)',
-    'GET /runs/:run_id': 'Fetch a specific run by ID — includes full graph, params, status, and stored response',
+    'GET /runs/:run_id': 'Fetch a specific run by ID — includes full graph, status, and stored response',
     'GET /logs': 'Recent execution log (JSONL file)',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
   },
@@ -286,6 +327,7 @@ app.get('/nodes', (c) => c.json(nodeSpec))
 app.get('/catalog', (c) => {
   const categoryFilter = c.req.query('category')
   const catalog = nodeSpec
+    .filter(s => s.category !== 'example')  // template artifacts, not real nodes
     .filter(s => !categoryFilter || s.category === categoryFilter)
     .map(s => ({
       name: s.name,
@@ -293,7 +335,7 @@ app.get('/catalog', (c) => {
       input_type: s.input_type,
       output_type: s.output_type,
       agent_hint: s.agent_hint,
-      has_wirable_params: s.params.some(p => p.wirable),
+      wirable_params: s.params.filter(p => p.wirable).map(p => p.name),
     }))
   return c.json(catalog)
 })
@@ -371,7 +413,7 @@ app.get('/defs/:type', (c) => {
   const typeName = c.req.param('type')
   const spec = nodeSpec.find(s => s.name === typeName)
   if (!spec) return c.json({ error: `Unknown node type: "${typeName}"` }, 404)
-  const example = EXAMPLES[typeName.replace(/-/g, '_')] ?? EXAMPLES[typeName] ?? null
+  const example = EXAMPLES[typeName] ?? null
   // Extract wirable params into a separate field with type info and descriptions
   const wirableParams = spec.ports.inputs
     .filter(p => p.name !== 'input')
@@ -383,13 +425,14 @@ app.get('/defs/:type', (c) => {
         description: paramSpec?.description ?? '',
       }
     })
-  return c.json({ ...spec, example, wirable_params: wirableParams })
+  return c.json({ ...spec, type: spec.name, example, wirable_params: wirableParams })
 })
 
 app.get('/defs', (c) => {
   const full = nodeSpec.map(s => ({
     ...s,
-    example: EXAMPLES[s.name.replace(/-/g, '_')] ?? EXAMPLES[s.name] ?? null,
+    type: s.name,
+    example: EXAMPLES[s.name] ?? null,
   }))
   return c.json(full)
 })
@@ -552,10 +595,10 @@ app.get('/patterns', (c) => c.json({
 //   Body: {"alias": "my-patch"}        → run a stored patch by alias
 //
 // Returns: application/json
-//   { status: "complete", outputs: { nodeId: nuonString }, result: nuonString | null }
+//   { status: "complete", outputs: { nodeId: value }, result: <parsed JSON value> | null }
 //   { status: "error", validation_errors: [...], errors: {...}, skipped: [...], fatal, result: null }
 //
-// The "result" field contains the output of the first "return" node, or the
+// The "result" field contains the parsed JSON output of the first "return" node, or the
 // last node's output if no return node is present.  This is the value agents
 // most commonly want.
 //
@@ -584,15 +627,21 @@ app.post('/exec', async (c) => {
         validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
       }, 400)
     }
-    // Support alias shorthand: {"alias": "my-patch"}
+    // Support alias shorthand: {"alias": "my-patch"} or {"alias": "...", "params": {...}}
     if (body && typeof body === 'object' && 'alias' in body) {
-      alias = String(body.alias)
+      alias = String((body as any).alias)
       const patch = getPatch(alias)
       if (!patch) {
         logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
         return c.json({ status: 'error', run_id, fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
       }
-      graph = patch.graph
+      // Apply runtime params: inject into const nodes whose value matches __param__:fieldname
+      const runtimeParams = (body as any).params
+      if (runtimeParams && typeof runtimeParams === 'object') {
+        graph = injectParams(patch.graph as any, runtimeParams)
+      } else {
+        graph = patch.graph
+      }
     } else {
       graph = body
     }
@@ -636,7 +685,8 @@ app.post('/exec', async (c) => {
       try {
         const result = await executeGraph(execGraph, nodeSpec, execRunId, execOutputsMode as any)
         updateRunStatus(execRunId, result.status)
-        insertResponse(execRunId, result)
+        const { nodeRecords: _nr, ...storedResult } = result
+        insertResponse(execRunId, storedResult)
         logRun({ type: 'exec', run_id: execRunId, alias: execAlias, status: result.status, node_count: execGraph.nodes?.length ?? 0, duration_ms: Date.now() - execT0 }, result.nodeRecords)
       } catch (err) {
         updateRunStatus(execRunId, 'error')
@@ -648,18 +698,22 @@ app.post('/exec', async (c) => {
   }
 
   const execResult = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any)
+  const { nodeRecords, ...resp } = execResult
 
   try {
-    insertRun(run_id, alias, graph, null, execResult.status)
-    insertResponse(run_id, execResult)
+    insertRun(run_id, alias, graph, null, resp.status)
+    insertResponse(run_id, resp)
   } catch (err) {
     console.error('Failed to store run/response:', err)
   }
 
-  const { nodeRecords, ...resp } = execResult
   logRun({ type: 'exec', run_id, alias, status: resp.status, node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 }, nodeRecords)
 
-  return c.json(resp, resp.status === 'error' ? 500 : 200)
+  // Use correct HTTP status: validation/runtime graph errors are client errors, not server errors
+  const httpStatus = resp.validation_errors?.length > 0 ? 422
+    : resp.fatal ? 400
+    : 200
+  return c.json(resp, httpStatus)
 })
 
 // ---------------------------------------------------------------------------
@@ -780,9 +834,12 @@ app.get('/runs/:run_id', (c) => {
     patch_alias: run.patch_alias,
     status: run.status,
     graph: run.graph,
-    params: run.params,
     created_at: run.created_at,
     response: response?.response ?? null,
+    _manifest: {
+      run_again: run.patch_alias ? `POST /exec {"alias": "${run.patch_alias}"}` : 'POST /exec with graph body',
+      visualise: run.patch_alias ? `GET /visualise/${run.patch_alias}` : null,
+    },
   })
 })
 

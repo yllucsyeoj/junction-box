@@ -4,7 +4,7 @@
 # Metadata used by scripts/introspect.nu for canvas display and agent use.
 # Keys match the short name (strip "prim-", replace "-" with "_").
 export const PRIMITIVE_META = {
-    fetch:         {category: "input",     color: "#f97316", wirable: ["url"],           agent_hint: "Fetch JSON/table data from a URL via HTTP GET. --url is wirable — wire a string output to set it dynamically.", param_options: {}}
+    fetch:         {category: "input",     color: "#f97316", wirable: ["url"], required_params: ["url"], agent_hint: "Fetch JSON/table data from a URL via HTTP GET. --url is wirable — wire a string output to set it dynamically.", param_options: {}}
     const:         {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Provide a fixed NUON constant value (e.g. 42, \"hello\", [1 2 3])", param_formats: {value: "nuon"}, param_options: {}}
     env:           {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read an environment variable by name, returns its string value", param_options: {}}
     file_in:       {category: "input",     color: "#f97316", wirable: [],               agent_hint: "Read a file — auto-detects CSV/JSON/NUON, else returns raw string", param_options: {}}
