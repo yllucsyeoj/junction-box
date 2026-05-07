@@ -27,10 +27,11 @@ interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export type SSEEvent =
   | { node_id: string; status: 'running' }
-  | { node_id: string; status: 'done'; output: string }
-  | { node_id: string; status: 'error'; error: string; error_type: string; expected_type?: string; got_type?: string }
-  | { node_id: string; status: 'skipped'; reason: string }
+  | { node_id: string; status: 'done'; output: string; duration_ms: number }
+  | { node_id: string; status: 'error'; error: string; error_type: string; expected_type?: string; got_type?: string; duration_ms: number }
+  | { node_id: string; status: 'skipped'; reason: string; duration_ms: number }
   | { node_id: string; status: 'warning'; message: string }
+  | { node_id: string; status: 'retry'; attempt: number; delay_ms: number; error: string }
   | { status: 'complete' }
 
 export interface NodeRunRecord {
@@ -115,10 +116,16 @@ function normalizeNuError(
     error_type = 'syntax'
   } else if (raw.includes('NotFound') || raw.includes('not found')) {
     error_type = 'not_found'
-  } else if (raw.includes('Network failure') || raw.includes('os error 111') || raw.includes('Connection refused') || raw.includes('unable to connect')) {
+  } else if (raw.includes('Network failure') || raw.includes('os error 111') || raw.includes('Connection refused') || raw.includes('unable to connect') || raw.includes('request timed out')) {
     error_type = 'network_error'
   } else if (raw.includes('Division by zero') || raw.includes('division_by_zero')) {
     error_type = 'arithmetic'
+  } else if (raw.includes('429') || raw.includes('Too Many Requests') || raw.includes('rate limit')) {
+    error_type = 'rate_limited'
+  } else if (raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('Internal Server Error') || raw.includes('Bad Gateway') || raw.includes('Service Unavailable')) {
+    error_type = 'upstream_error'
+  } else if (raw.includes('400') || raw.includes('Bad Request') || raw.includes('FRED series ID')) {
+    error_type = 'invalid_request'
   }
 
   // Extract got_type for type_mismatch errors
@@ -176,10 +183,12 @@ export async function runPipeline(
 
     // Skip orphaned source nodes — source nodes (input_type: nothing) with no outgoing edges
     // have nowhere to send their output; running them wastes external API quota.
+    // Exception: single-node graphs are allowed (enables POST /exec with one source node)
     const nodeSpecEntry = specMap.get(node.type)
     const isSource = nodeSpecEntry?.input_type === 'nothing'
     const hasOutgoing = graph.edges.some(e => e.from === nodeId)
-    if (isSource && !hasOutgoing) {
+    const isSingleNode = graph.nodes.length === 1
+    if (isSource && !hasOutgoing && !isSingleNode) {
       emit({ node_id: nodeId, status: 'skipped', reason: `Orphaned source node — no outgoing edges, output would be discarded.` })
       outputs.set(nodeId, 'null')
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'skipped', duration_ms: Date.now() - nodeStart })
@@ -207,6 +216,10 @@ export async function runPipeline(
     const paramEnv: Record<string, string> = {}
     const resolvedFlags: string[] = []
 
+    // Extract timeout/retry settings before building flags (handled at TypeScript level)
+    const timeoutMs = Number((node.params ?? {})['timeout_ms'] ?? process.env.GONUDE_TIMEOUT_MS ?? 30000)
+    const maxRetries = Number((node.params ?? {})['retries'] ?? process.env.GONUDE_RETRIES ?? 1)
+
     const wiredPorts = new Set(
       graph.edges
         .filter(e => e.to === nodeId && e.to_port !== 'input')
@@ -215,6 +228,8 @@ export async function runPipeline(
     const allParamNames = new Set([...(node.params ? Object.keys(node.params) : []), ...wiredPorts])
 
     for (const paramName of allParamNames) {
+      // Skip execution-control params that are handled at the TypeScript level
+      if (paramName === 'timeout_ms' || paramName === 'retries') continue
       // Sanitize paramName before embedding in Nu script — defense-in-depth
       if (!/^[a-z][a-z0-9_-]*$/.test(paramName)) continue
       const paramValue = (node.params ?? {})[paramName] ?? ''
@@ -227,6 +242,152 @@ export async function runPipeline(
           const values = paramEdges.map(e => outputs.get(e.from) ?? 'null')
           paramEnv[envKey] = JSON.stringify(values)
         }
+        resolvedFlags.push(`--${paramName} $env.${envKey}`)
+      } else {
+        // Escape string value for Nu — wrap in quotes, escape inner quotes
+        const escaped = String(paramValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        resolvedFlags.push(`--${paramName} "${escaped}"`)
+      }
+    }
+
+    // Build Nu invocation
+    const flagStr = resolvedFlags.join(' ')
+    // Allowlist node.type before embedding in Nu script — defense-in-depth
+    if (!/^[a-z][a-z0-9_-]*$/.test(node.type)) {
+      const errMsg = `Invalid node type "${node.type}" — must match [a-z][a-z0-9_-]*`
+      emit({ node_id: nodeId, status: 'error', error: errMsg, error_type: 'runtime', duration_ms: Date.now() - nodeStart })
+      failed.add(nodeId)
+      outputs.set(nodeId, 'null')
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: errMsg, error_type: 'runtime' })
+      continue
+    }
+    const cmdName = `prim-${node.type}`
+    // Pass pipeline input via env var — to json produces multi-line output which
+    // would break Nu string-literal embedding; env vars handle arbitrary content safely.
+    const PIPE_IN = 'GONUDE_PIPE_IN'
+    if (pipelineInput !== null) paramEnv[PIPE_IN] = pipelineInput
+    const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
+    // All nodes serialize to JSON — clean for API consumers and jq-able directly.
+    const serialize = '| to json'
+    // Use $e.json to capture the full nested error structure, not just the outer $e.msg
+    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| "$"__GONUDE_ERROR:($e.json)"" | to json }`
+
+    // Retry loop with exponential backoff
+    let attempt = 0
+    let stdout = ''
+    let stderr = ''
+    let exitCode = 0
+    let lastErrorType = 'runtime'
+    let lastErrorMessage = ''
+    const retryableTypes = new Set(['network_error', 'rate_limited', 'upstream_error'])
+
+    while (attempt <= maxRetries) {
+      const spawnStart = Date.now()
+      const proc = Bun.spawnSync(
+        ['nu', '-c', nuScript],
+        {
+          cwd: ROOT,
+          env: { ...process.env, ...paramEnv, GONUDE_TIMEOUT_MS: String(timeoutMs), GONUDE_RETRIES: String(maxRetries) } as Record<string, string>,
+          stderr: 'pipe',
+          timeout: timeoutMs,
+        }
+      )
+      stdout = Buffer.from(proc.stdout).toString().trim()
+      stderr = Buffer.from(proc.stderr).toString().trim()
+      exitCode = proc.exitCode ?? 1
+
+      const nodeSpec = specMap.get(node.type)
+      const expectedType = nodeSpec?.input_type
+
+      if (exitCode !== 0) {
+        const { message, error_type } = normalizeNuError(stderr, node.type, node.params, expectedType)
+        lastErrorType = error_type
+        lastErrorMessage = message
+        if (attempt < maxRetries && retryableTypes.has(error_type)) {
+          const delayMs = Math.min(2000 * (2 ** attempt), 30000) // 2s, 4s, 8s... cap 30s
+          emit({ node_id: nodeId, status: 'retry', attempt: attempt + 1, delay_ms: delayMs, error: message })
+          await Bun.sleep(delayMs)
+          attempt++
+          continue
+        }
+      } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
+        let raw: string
+        try {
+          const outer = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+          const errObj = JSON.parse(outer)
+          let inner = errObj
+          while (inner.inner && inner.inner.length > 0) {
+            inner = inner.inner[0]
+          }
+          raw = inner.msg || errObj.msg || outer
+        } catch {
+          raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+        }
+        const { message, error_type } = normalizeNuError(raw, node.type, node.params, expectedType)
+        lastErrorType = error_type
+        lastErrorMessage = message
+        if (attempt < maxRetries && retryableTypes.has(error_type)) {
+          const delayMs = Math.min(2000 * (2 ** attempt), 30000)
+          emit({ node_id: nodeId, status: 'retry', attempt: attempt + 1, delay_ms: delayMs, error: message })
+          await Bun.sleep(delayMs)
+          attempt++
+          continue
+        }
+      } else {
+        // Success — break out of retry loop
+        break
+      }
+      break // Non-retryable error or exhausted retries
+    }
+
+    const nodeSpec = specMap.get(node.type)
+    const expectedType = nodeSpec?.input_type
+    const durationMs = Date.now() - nodeStart
+
+    if (exitCode !== 0) {
+      const { message, error_type, expected_type, got_type } = normalizeNuError(stderr, node.type, node.params, expectedType)
+      const errInfo = { error: message, error_type, expected_type, got_type }
+      errors.set(nodeId, errInfo)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type, duration_ms: durationMs })
+      outputs.set(nodeId, 'null')
+      failed.add(nodeId)
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: durationMs, error: message, error_type })
+    } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
+      let raw: string
+      try {
+        const outer = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+        const errObj = JSON.parse(outer)
+        let inner = errObj
+        while (inner.inner && inner.inner.length > 0) {
+          inner = inner.inner[0]
+        }
+        raw = inner.msg || errObj.msg || outer
+      } catch {
+        raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
+      }
+      const { message, error_type, expected_type, got_type } = normalizeNuError(raw, node.type, node.params, expectedType)
+      const errInfo = { error: message, error_type, expected_type, got_type }
+      errors.set(nodeId, errInfo)
+      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type, duration_ms: durationMs })
+      outputs.set(nodeId, 'null')
+      failed.add(nodeId)
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: durationMs, error: message, error_type })
+    } else {
+      outputs.set(nodeId, stdout)
+      emit({ node_id: nodeId, status: 'done', output: stdout, duration_ms: durationMs })
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'done', duration_ms: durationMs })
+      if (node.type === 'join') {
+        try {
+          const result = JSON.parse(stdout)
+          if (Array.isArray(result) && result.length === 0) {
+            emit({ node_id: nodeId, status: 'warning', message: 'join returned an empty array — check that the "on" column exists in both tables and that column names match exactly.' })
+          }
+        } catch {
+          // stdout wasn't JSON — ignore
+        }
+      }
+    }
+  }
         resolvedFlags.push(`--${paramName} $env.${envKey}`)
       } else {
         // Escape string value for Nu — wrap in quotes, escape inner quotes

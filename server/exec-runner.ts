@@ -19,7 +19,8 @@ export async function executeGraph(
   graph: any,
   nodeSpec: NodeSpec[],
   runId: string,
-  outputsMode: 'none' | 'full' = 'none'
+  outputsMode: 'none' | 'full' = 'none',
+  onEvent?: (event: SSEEvent) => void
 ): Promise<ExecResult> {
   const outputs: Record<string, string> = {}
   const errors: Record<string, { message: string; error_type: string }> = {}
@@ -47,6 +48,7 @@ export async function executeGraph(
 
   try {
     nodeRecords = await runPipeline(graph, (event: SSEEvent) => {
+      if (onEvent) onEvent(event)
       if ('node_id' in event) {
         if (event.status === 'done') outputs[event.node_id] = event.output
         if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type, ...(event.expected_type ? { expected_type: event.expected_type } : {}), ...(event.got_type ? { got_type: event.got_type } : {}) }

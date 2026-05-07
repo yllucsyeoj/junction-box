@@ -3,6 +3,13 @@ import { Database } from 'bun:sqlite';
 const DATA_DIR = process.env.GONUDE_DATA_DIR || './data';
 let _db: Database | null = null;
 
+function addColumnIfNotExists(db: Database, table: string, column: string, def: string): void {
+  const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!info.some(row => row.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+  }
+}
+
 export function initDb(path?: string): Database {
   const dbPath = path || `${DATA_DIR}/junction-box.db`;
   const db = new Database(dbPath);
@@ -34,6 +41,11 @@ export function initDb(path?: string): Database {
       FOREIGN KEY (run_id) REFERENCES runs(run_id)
     );
   `);
+
+  // Schema migrations for patch metadata (Phase 5.1)
+  addColumnIfNotExists(db, 'patches', 'input_schema', 'TEXT');
+  addColumnIfNotExists(db, 'patches', 'output_description', 'TEXT');
+  addColumnIfNotExists(db, 'patches', 'tags', 'TEXT');
 
   _db = db;
   return db;
@@ -77,30 +89,44 @@ export function insertPatch(alias: string, description: string, graph: unknown):
   db.prepare('INSERT INTO patches (alias, description, graph) VALUES (?, ?, ?)').run(alias, description, graphJson);
 }
 
-export function upsertPatch(alias: string, description: string, graph: unknown): boolean {
+export function upsertPatch(
+  alias: string,
+  description: string,
+  graph: unknown,
+  inputSchema?: unknown,
+  outputDescription?: string,
+  tags?: string[]
+): boolean {
   const db = getDb();
   const graphJson = typeof graph === 'string' ? graph : JSON.stringify(graph);
+  const inputSchemaJson = inputSchema !== undefined ? JSON.stringify(inputSchema) : null;
+  const tagsJson = tags !== undefined ? JSON.stringify(tags) : null;
   const tx = db.transaction(() => {
     const existing = db.prepare('SELECT alias FROM patches WHERE alias = ?').get(alias);
     if (existing) {
-      db.prepare("UPDATE patches SET description = ?, graph = ?, updated_at = datetime('now') WHERE alias = ?").run(description, graphJson, alias);
+      db.prepare("UPDATE patches SET description = ?, graph = ?, input_schema = ?, output_description = ?, tags = ?, updated_at = datetime('now') WHERE alias = ?")
+        .run(description, graphJson, inputSchemaJson, outputDescription ?? null, tagsJson, alias);
       return true;
     } else {
-      db.prepare('INSERT INTO patches (alias, description, graph) VALUES (?, ?, ?)').run(alias, description, graphJson);
+      db.prepare('INSERT INTO patches (alias, description, graph, input_schema, output_description, tags) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(alias, description, graphJson, inputSchemaJson, outputDescription ?? null, tagsJson);
       return false;
     }
   });
   return tx() as boolean;
 }
 
-export function getPatch(alias: string): { alias: string; description: string; graph: unknown; created_at: string } | null {
+export function getPatch(alias: string): { alias: string; description: string; graph: unknown; input_schema: unknown; output_description: string | null; tags: string[]; created_at: string } | null {
   const db = getDb();
-  const row = db.prepare('SELECT alias, description, graph, created_at FROM patches WHERE alias = ?').get(alias) as { alias: string; description: string; graph: string; created_at: string } | null;
+  const row = db.prepare('SELECT alias, description, graph, input_schema, output_description, tags, created_at FROM patches WHERE alias = ?').get(alias) as { alias: string; description: string; graph: string; input_schema: string | null; output_description: string | null; tags: string | null; created_at: string } | null;
   if (!row) return null;
   return {
     alias: row.alias,
     description: row.description,
     graph: JSON.parse(row.graph),
+    input_schema: row.input_schema !== null ? JSON.parse(row.input_schema) : null,
+    output_description: row.output_description,
+    tags: row.tags !== null ? JSON.parse(row.tags) : [],
     created_at: row.created_at,
   };
 }
@@ -119,15 +145,18 @@ export function extractRequiredParams(graph: unknown): string[] {
   return params;
 }
 
-export function listPatches(): Array<{ alias: string; description: string; node_types: string[]; node_count: number; required_params: string[]; created_at: string }> {
+export function listPatches(): Array<{ alias: string; description: string; node_types: string[]; node_count: number; required_params: string[]; input_schema: unknown; output_description: string | null; tags: string[]; created_at: string }> {
   const db = getDb();
-  const rows = db.prepare('SELECT alias, description, graph, created_at FROM patches ORDER BY created_at DESC').all() as Array<{ alias: string; description: string; graph: string; created_at: string }>;
+  const rows = db.prepare('SELECT alias, description, graph, input_schema, output_description, tags, created_at FROM patches ORDER BY created_at DESC').all() as Array<{ alias: string; description: string; graph: string; input_schema: string | null; output_description: string | null; tags: string | null; created_at: string }>;
   return rows.map(row => ({
     alias: row.alias,
     description: row.description,
     node_types: extractNodeTypes(row.graph),
     node_count: countNodes(row.graph),
     required_params: extractRequiredParams(row.graph),
+    input_schema: row.input_schema !== null ? JSON.parse(row.input_schema) : null,
+    output_description: row.output_description,
+    tags: row.tags !== null ? JSON.parse(row.tags) : [],
     created_at: row.created_at,
   }));
 }
