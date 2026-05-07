@@ -2,7 +2,7 @@
 
 A node-graph dataflow execution engine designed for LLM agents. Compose data pipelines as `{nodes, edges}` graphs, POST them to an API, and receive transformed data back.
 
-Built on [Nushell](https://www.nushell.sh/) for data transformation, [Hono](https://hono.dev/) for the API, and [ReactFlow](https://reactflow.dev/) for the visual canvas.
+Built on [Nushell](https://www.nushell.sh/) for data transformation and [Hono](https://hono.dev/) for the API.
 
 ---
 
@@ -33,7 +33,6 @@ Built on [Nushell](https://www.nushell.sh/) for data transformation, [Hono](http
 - **Topological execution** — automatic dependency resolution and parallelization where safe
 - **Nushell-powered transforms** — all data operations delegate to Nushell subprocesses for robust structured data handling
 - **LLM-native** — first-class `llm` and `analyze` nodes with support for Anthropic, OpenAI, and local models (LM Studio, Ollama)
-- **Visual canvas** — ReactFlow frontend for building and running graphs interactively
 - **Persistent patches** — save and reuse named pipeline graphs in SQLite
 - **Streaming execution** — Server-Sent Events for real-time progress on the canvas
 - **Mermaid diagrams** — generate ASCII flowcharts from any saved patch
@@ -84,14 +83,6 @@ Nushell must be on your `$PATH`. The Docker image includes Nushell automatically
 cd server
 bun install
 bun run dev          # --watch mode on port 3001
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-bun install
-bun run dev          # Vite dev server
 ```
 
 ### Docker
@@ -169,8 +160,6 @@ Key server modules:
 | `server/spec.ts` | Dynamic introspection of Nushell primitives |
 | `server/toposort.ts` | Topological sort utility |
 | `server/mermaid.ts` | Mermaid diagram generation |
-
-The frontend is a standard React + Vite app using ReactFlow for the canvas.
 
 ---
 
@@ -275,7 +264,6 @@ junction-box/
 ├── data/                   # SQLite DB, logs, datasets
 ├── docs/                   # Design docs and superpowers
 ├── extensions/             # Nushell data-source extensions (14 files)
-├── frontend/               # React + Vite + ReactFlow UI
 ├── junction-box-graphs/    # 50+ example pipeline JSONs
 ├── patches/                # Legacy patch files
 ├── primitives.nu           # Core Nushell primitive definitions
