@@ -199,6 +199,24 @@ app.get('/', (c) => c.json({
     },
   },
 
+  // ── Scheduling ────────────────────────────────────────────────────────────
+  scheduling: {
+    description: 'Run patches on a recurring cron schedule with optional webhook delivery. The server checks every 60 seconds for due schedules.',
+    cron_format: '5 fields: "min hour day month weekday" (e.g. "0 9 * * 1" = every Monday at 9am). Also supports @hourly, @daily, @weekly, @monthly.',
+    how_to_create: 'POST /patch with {alias, description, graph, cron: "0 * * * *", webhook: "https://..."} — saves patch AND creates schedule.',
+    how_to_update: 'PATCH /schedules/:alias with {cron?, webhook?, active?} — toggle on/off without deleting.',
+    how_to_trigger_now: 'POST /schedules/:alias/trigger — run immediately, updates last_run_* and sends webhook if configured.',
+    how_to_list: 'GET /schedules — returns all schedules with next_run timestamp. GET /schedules/:alias for one.',
+    how_to_delete: 'DELETE /schedules/:alias — removes schedule (patch itself remains). DELETE /patch/:alias removes both.',
+    webhook_payload: 'POST to webhook URL: {event: "scheduled_run", run_id, alias, status, result, run_at, webhook_id}. 10s timeout, 1 retry.',
+    notes: [
+      'Only active schedules fire. Set active: false to pause.',
+      'If a run takes longer than the cron interval, the next cycle is skipped (no queueing).',
+      'Webhook failures are logged but do not mark the run as failed.',
+      'All scheduled runs are stored in SQLite same as manual runs — queryable via GET /patch/:alias/runs.',
+    ],
+  },
+
   // ── Core Concept ─────────────────────────────────────────────────────────
   concept: {
     description: 'A pipeline is a directed graph of nodes. Data flows from left to right along edges.',
