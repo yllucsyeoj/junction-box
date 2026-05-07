@@ -951,7 +951,7 @@ app.post('/parse-nuon', async (c) => {
   }
   const parsed = nuonToGraph(nuonText)
   if (!parsed.ok) {
-    return c.json({ error: 'Invalid NUON', detail: parsed.error }, 400)
+    return c.json({ status: 'error', error: 'Invalid NUON', detail: parsed.error }, 400)
   }
   return c.json(parsed.graph)
 })

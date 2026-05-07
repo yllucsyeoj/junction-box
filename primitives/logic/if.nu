@@ -11,8 +11,8 @@ export def "prim-if" [
     let passes = match $op {
         "=="          => { ($subject | into string) == $value }
         "!="          => { ($subject | into string) != $value }
-        ">"           => { ($subject | into float) > ($value | into float) }
-        "<"           => { ($subject | into float) < ($value | into float) }
+        ">"           => { try { ($subject | into float) > ($value | into float) } catch { error make {msg: $"The 'if' node expects a scalar input for numeric comparison. Received: ($subject | describe). For table/record conditions, use 'filter' or 'col-stats' instead."} } }
+        "<"           => { try { ($subject | into float) < ($value | into float) } catch { error make {msg: $"The 'if' node expects a scalar input for numeric comparison. Received: ($subject | describe). For table/record conditions, use 'filter' or 'col-stats' instead."} } }
         "is-empty"    => { $subject | is-empty }
         "is-not-empty" => { not ($subject | is-empty) }
         _ => { error make {msg: $"Unknown op: ($op). Valid: ==, !=, >, <, is-empty, is-not-empty"} }

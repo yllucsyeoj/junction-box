@@ -497,7 +497,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
 
   'reddit-comments': {
     nodes: [
-      { id: 'src', type: 'reddit-comments', params: { url: 'https://www.reddit.com/r/programming/comments/example/', limit: '10' } },
+      { id: 'src', type: 'reddit-comments', params: { post_id: 'https://www.reddit.com/r/programming/comments/example/', limit: '10' } },
       ret(),
     ],
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
@@ -581,7 +581,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
 
   'youtube-transcript': {
     nodes: [
-      { id: 'src', type: 'youtube-transcript', params: { id: 'dQw4w9WgXcQ' } },
+      { id: 'src', type: 'youtube-transcript', params: { video_id: 'dQw4w9WgXcQ' } },
       ret(),
     ],
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
@@ -625,7 +625,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
 
   'market-history': {
     nodes: [
-      { id: 'src', type: 'market-history', params: { ticker: 'AAPL', period: '1mo' } },
+      { id: 'src', type: 'market-history', params: { ticker: 'AAPL', range: '1mo' } },
       ret(),
     ],
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
@@ -659,7 +659,7 @@ export const EXAMPLES: Record<string, MiniGraph> = {
 
   'coingecko-simple': {
     nodes: [
-      { id: 'src', type: 'coingecko-simple', params: { ids: 'bitcoin,ethereum', currency: 'usd' } },
+      { id: 'src', type: 'coingecko-simple', params: { ids: 'bitcoin,ethereum', vs: 'usd' } },
       ret(),
     ],
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
