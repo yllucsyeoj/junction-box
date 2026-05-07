@@ -61,6 +61,26 @@ export function initDb(path?: string): Database {
     ORDER BY r.created_at DESC
   `);
 
+  // Schedules table for cron-based patch execution
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alias TEXT UNIQUE NOT NULL,
+      webhook TEXT,
+      cron_expr TEXT NOT NULL,
+      active INTEGER DEFAULT 1,
+      next_run_at TEXT,
+      last_run_at TEXT,
+      last_run_id TEXT,
+      last_status TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (alias) REFERENCES patches(alias) ON DELETE CASCADE
+    )
+  `);
+
+  // Migration: add next_run_at column if missing (added in schedule support)
+  addColumnIfNotExists(db, 'schedules', 'next_run_at', 'TEXT');
+
   _db = db;
   return db;
 }
@@ -299,4 +319,67 @@ export function listRunResults(
       data: response?.result ?? null,
     };
   });
+}
+
+export interface ScheduleRow {
+  id: number;
+  alias: string;
+  webhook: string | null;
+  cron_expr: string;
+  active: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_run_id: string | null;
+  last_status: string | null;
+  created_at: string;
+}
+
+export function insertSchedule(alias: string, cronExpr: string, webhook?: string, nextRunAt?: string): void {
+  const db = getDb();
+  db.prepare('INSERT INTO schedules (alias, cron_expr, webhook, next_run_at) VALUES (?, ?, ?, ?)')
+    .run(alias, cronExpr, webhook ?? null, nextRunAt ?? null);
+}
+
+export function getSchedule(alias: string): ScheduleRow | null {
+  const db = getDb();
+  const row = db.prepare('SELECT id, alias, webhook, cron_expr, active, next_run_at, last_run_at, last_run_id, last_status, created_at FROM schedules WHERE alias = ?')
+    .get(alias) as any;
+  if (!row) return null;
+  return { ...row, active: Boolean(row.active) };
+}
+
+export function listSchedules(): ScheduleRow[] {
+  const db = getDb();
+  const rows = db.prepare('SELECT id, alias, webhook, cron_expr, active, next_run_at, last_run_at, last_run_id, last_status, created_at FROM schedules ORDER BY created_at DESC')
+    .all() as any[];
+  return rows.map(row => ({ ...row, active: Boolean(row.active) }));
+}
+
+export function updateSchedule(alias: string, fields: { cron_expr?: string; webhook?: string; active?: boolean; next_run_at?: string; last_run_at?: string; last_run_id?: string; last_status?: string }): boolean {
+  const db = getDb();
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  if (fields.cron_expr !== undefined) { sets.push('cron_expr = ?'); values.push(fields.cron_expr); }
+  if (fields.webhook !== undefined) { sets.push('webhook = ?'); values.push(fields.webhook); }
+  if (fields.active !== undefined) { sets.push('active = ?'); values.push(fields.active ? 1 : 0); }
+  if (fields.next_run_at !== undefined) { sets.push('next_run_at = ?'); values.push(fields.next_run_at); }
+  if (fields.last_run_at !== undefined) { sets.push('last_run_at = ?'); values.push(fields.last_run_at); }
+  if (fields.last_run_id !== undefined) { sets.push('last_run_id = ?'); values.push(fields.last_run_id); }
+  if (fields.last_status !== undefined) { sets.push('last_status = ?'); values.push(fields.last_status); }
+  if (sets.length === 0) return false;
+  values.push(alias);
+  const result = db.prepare(`UPDATE schedules SET ${sets.join(', ')} WHERE alias = ?`).run(...values);
+  return result.changes > 0;
+}
+
+export function deleteSchedule(alias: string): boolean {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM schedules WHERE alias = ?').run(alias);
+  return result.changes > 0;
+}
+
+export function deleteScheduleByPatch(alias: string): boolean {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM schedules WHERE alias = ?').run(alias);
+  return result.changes > 0;
 }

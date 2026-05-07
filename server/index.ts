@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, listRunResults, extractRequiredParams, insertRun, updateRunStatus, insertResponse } from './db'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, listRunResults, extractRequiredParams, insertRun, updateRunStatus, insertResponse, insertSchedule, getSchedule, listSchedules, updateSchedule, deleteSchedule, deleteScheduleByPatch } from './db'
 import { loadSpec } from './spec'
 import { type NodeRunRecord, type SSEEvent, runPipeline } from './execute'
 import { validateGraph } from './validate'
@@ -10,6 +10,8 @@ import { executeGraph } from './exec-runner'
 import { EXAMPLES } from './examples'
 import { graphToMermaid } from './mermaid'
 import { renderMermaidASCII } from 'beautiful-mermaid'
+import { parseCron, getNextRunFromExpr } from './cron'
+import { sendWebhook } from './webhook'
 
 const app = new Hono()
 app.use('/*', cors())
@@ -282,7 +284,7 @@ app.get('/', (c) => c.json({
     'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Single-node graphs work too (result returned directly). Per-node params: timeout_ms (ms, default 30000) and retries (count, default 1) for auto-retry on transient network errors. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs. Add Accept: text/event-stream header for SSE streaming.',
     'POST /exec (SSE mode)': 'Add header Accept: text/event-stream → streams per-node events: running, done, retry, error, complete. Includes duration_ms and retry attempts.',
     'POST /exec (reference mode)': 'Add header X-Reference: true → returns {status: "pending", run_id: "..."} immediately. Execute GET /runs/:run_id later to fetch result.',
-    'POST /patch': 'Save a validated graph: {alias, description, graph, input_schema?, output_description?, tags?}. All patches are validated before storing — required params must be static or wired to __param__: placeholders. Tags and metadata help discovery and documentation.',
+    'POST /patch': 'Save a validated graph: {alias, description, graph, input_schema?, output_description?, tags?, cron?, webhook?}. All patches are validated before storing — required params must be static or wired to __param__: placeholders. Tags and metadata help discovery and documentation. Include cron expression for scheduled execution and webhook URL for result delivery.',
     'GET /patches': 'List all saved patches (stored in SQLite)',
     'GET /patch/:alias': 'Get a saved patch by alias',
     'GET /patch/:alias/params': 'Introspect patch parameters — returns {alias, params, has_wired_params, wired_defaults}',
@@ -296,6 +298,11 @@ app.get('/', (c) => c.json({
     'GET /logs': 'Recent execution log (JSONL file)',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
     'PATCH /patch/:alias': 'Update an existing patch\'s description or graph',
+    'GET /schedules': 'List all scheduled patches with next run times',
+    'GET /schedules/:alias': 'Get a specific schedule',
+    'PATCH /schedules/:alias': 'Update schedule: {active, cron?, webhook?}',
+    'DELETE /schedules/:alias': 'Remove a schedule',
+    'POST /schedules/:alias/trigger': 'Manually trigger a scheduled patch run',
   },
 
   // ── Critical Gotchas ─────────────────────────────────────────────────────
@@ -997,7 +1004,7 @@ app.post('/preview', async (c) => {
 // ---------------------------------------------------------------------------
 app.post('/patch', async (c) => {
   const body = await c.req.json()
-  const { alias, description, graph, input_schema, output_description, tags } = body
+  const { alias, description, graph, input_schema, output_description, tags, webhook, cron } = body
 
   if (!alias || typeof alias !== 'string' || !/^[a-z0-9_-]+$/.test(alias)) {
     return c.json({ error: 'alias must be a lowercase alphanumeric string (hyphens/underscores ok)' }, 400)
@@ -1043,14 +1050,49 @@ app.post('/patch', async (c) => {
     }, 422)
   }
 
+  // Validate cron if provided
+  if (cron && typeof cron === 'string') {
+    const parsed = parseCron(cron)
+    if (!parsed.valid) {
+      return c.json({ error: 'Invalid cron expression.', detail: parsed.error }, 400)
+    }
+  }
+
   const tagArray = Array.isArray(tags) ? tags : undefined
   const updated = upsertPatch(alias, description.trim(), graph, input_schema, output_description, tagArray)
+
+  // Handle schedule creation/update if cron is provided
+  if (cron && typeof cron === 'string') {
+    try {
+      const existingSchedule = getSchedule(alias)
+      const nextRun = getNextRunFromExpr(cron)?.toISOString()
+      if (existingSchedule) {
+        updateSchedule(alias, { cron_expr: cron, webhook: webhook ?? undefined, next_run_at: nextRun })
+      } else {
+        insertSchedule(alias, cron, webhook, nextRun)
+      }
+    } catch (err) {
+      return c.json({ error: 'Patch saved but schedule creation failed.', detail: String(err) }, 500)
+    }
+  } else if (webhook && typeof webhook === 'string') {
+    // Webhook without cron: update existing schedule or store as one-time reference
+    try {
+      const existingSchedule = getSchedule(alias)
+      if (existingSchedule) {
+        updateSchedule(alias, { webhook: webhook })
+      }
+    } catch (err) {
+      return c.json({ error: 'Patch saved but webhook update failed.', detail: String(err) }, 500)
+    }
+  }
+
   logRun({ type: 'patch_save', alias })
   return c.json({
     ok: true,
     alias,
     validated: true,
     updated,
+    schedule: cron ? { cron, webhook, next_run: getNextRunFromExpr(cron)?.toISOString() } : null,
     _manifest: {
       hint: 'Run this patch: POST /exec {alias: "..."}',
       visualise: 'GET /visualise/:alias',
@@ -1088,7 +1130,7 @@ app.patch('/patch/:alias', async (c) => {
   }
 
   const body = await c.req.json()
-  const { description, graph } = body
+  const { description, graph, webhook, cron } = body
 
   const newDescription = description !== undefined ? description.trim() : existing.description
   const newGraph = graph !== undefined ? graph : existing.graph
@@ -1105,6 +1147,32 @@ app.patch('/patch/:alias', async (c) => {
   }
 
   upsertPatch(alias, newDescription, newGraph)
+
+  // Update schedule if cron/webhook changed
+  if (cron !== undefined || webhook !== undefined) {
+    const schedule = getSchedule(alias)
+    if (schedule) {
+      const fields: any = {}
+      if (cron !== undefined) {
+        if (cron && typeof cron === 'string') {
+          const parsed = parseCron(cron)
+          if (!parsed.valid) {
+            return c.json({ error: 'Invalid cron expression.', detail: parsed.error }, 400)
+          }
+          fields.cron_expr = cron
+        }
+      }
+      if (webhook !== undefined) fields.webhook = webhook
+      updateSchedule(alias, fields)
+    } else if (cron && typeof cron === 'string') {
+      const parsed = parseCron(cron)
+      if (!parsed.valid) {
+        return c.json({ error: 'Invalid cron expression.', detail: parsed.error }, 400)
+      }
+      insertSchedule(alias, cron, webhook)
+    }
+  }
+
   logRun({ type: 'patch_update', alias })
   return c.json({ ok: true, alias, updated: true })
 })
@@ -1213,6 +1281,7 @@ app.get('/patch/:alias/params', (c) => {
 
 app.delete('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
+  deleteScheduleByPatch(alias)
   const deleted = deletePatch(alias)
   if (!deleted) {
     return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
@@ -1368,6 +1437,229 @@ app.get('/visualise/:alias', async (c) => {
     return c.json({ error: 'Failed to render diagram', details: String(err) }, 500)
   }
 })
+
+// ---------------------------------------------------------------------------
+// GET /schedules — list all scheduled patches
+// ---------------------------------------------------------------------------
+app.get('/schedules', (c) => {
+  const schedules = listSchedules()
+  return c.json({
+    schedules: schedules.map(s => ({
+      ...s,
+      next_run: s.active ? getNextRunFromExpr(s.cron_expr)?.toISOString() : null,
+    })),
+    _manifest: {
+      hint: 'POST /patch with {alias, description, graph, cron?, webhook?} to create a schedule. POST /schedules/:alias/trigger to run immediately.',
+      endpoints: ['GET /schedules', 'GET /schedules/:alias', 'PATCH /schedules/:alias', 'DELETE /schedules/:alias', 'POST /schedules/:alias/trigger'],
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /schedules/:alias — get a specific schedule
+// ---------------------------------------------------------------------------
+app.get('/schedules/:alias', (c) => {
+  const alias = c.req.param('alias')
+  const schedule = getSchedule(alias)
+  if (!schedule) {
+    return c.json({ status: 'error', error: `Schedule "${alias}" not found.` }, 404)
+  }
+  return c.json({
+    ...schedule,
+    next_run: schedule.active ? getNextRunFromExpr(schedule.cron_expr)?.toISOString() : null,
+    _manifest: {
+      hint: 'PATCH to update active/cron/webhook. DELETE to remove. POST /schedules/:alias/trigger to run immediately.',
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PATCH /schedules/:alias — update schedule active/cron/webhook
+// ---------------------------------------------------------------------------
+app.patch('/schedules/:alias', async (c) => {
+  const alias = c.req.param('alias')
+  const schedule = getSchedule(alias)
+  if (!schedule) {
+    return c.json({ status: 'error', error: `Schedule "${alias}" not found.` }, 404)
+  }
+
+  const body = await c.req.json()
+  const { active, cron: newCron, webhook: newWebhook } = body
+
+  if (newCron !== undefined && typeof newCron === 'string') {
+    const parsed = parseCron(newCron)
+    if (!parsed.valid) {
+      return c.json({ error: 'Invalid cron expression.', detail: parsed.error }, 400)
+    }
+  }
+
+  const fields: any = {}
+  if (active !== undefined) fields.active = Boolean(active)
+  if (newCron !== undefined) {
+    fields.cron_expr = newCron
+    fields.next_run_at = getNextRunFromExpr(newCron)?.toISOString()
+  }
+  if (newWebhook !== undefined) fields.webhook = newWebhook
+
+  const updated = updateSchedule(alias, fields)
+  if (!updated) {
+    return c.json({ status: 'error', error: 'Schedule not updated.' }, 500)
+  }
+
+  const updatedSchedule = getSchedule(alias)!
+  return c.json({
+    ok: true,
+    alias,
+    schedule: {
+      ...updatedSchedule,
+      next_run: updatedSchedule.active ? getNextRunFromExpr(updatedSchedule.cron_expr)?.toISOString() : null,
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DELETE /schedules/:alias — remove a schedule
+// ---------------------------------------------------------------------------
+app.delete('/schedules/:alias', (c) => {
+  const alias = c.req.param('alias')
+  const deleted = deleteSchedule(alias)
+  if (!deleted) {
+    return c.json({ status: 'error', error: `Schedule "${alias}" not found.` }, 404)
+  }
+  return c.json({ ok: true, alias })
+})
+
+// ---------------------------------------------------------------------------
+// POST /schedules/:alias/trigger — manually trigger a scheduled patch
+// ---------------------------------------------------------------------------
+app.post('/schedules/:alias/trigger', async (c) => {
+  const alias = c.req.param('alias')
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+
+  const schedule = getSchedule(alias)
+  const run_id = makeRunId()
+  const t0 = Date.now()
+
+  insertRun(run_id, alias, patch.graph, null, 'scheduled')
+  const execResult = await executeGraph(patch.graph as any, nodeSpec, run_id, 'none')
+  updateRunStatus(run_id, execResult.status)
+  const { nodeRecords: _nr, ...resp } = execResult
+  insertResponse(run_id, resp)
+
+  // Send webhook if configured
+  if (schedule?.webhook) {
+    const whResult = await sendWebhook(schedule.webhook, {
+      event: 'scheduled_run',
+      run_id,
+      alias,
+      status: execResult.status,
+      result: execResult.result,
+      run_at: new Date().toISOString(),
+    })
+    if (!whResult.ok) {
+      logRun({ type: 'webhook_failure', alias, run_id, error: whResult.error })
+    }
+  }
+
+  // Update schedule metadata if it exists
+  if (schedule) {
+    const newNextRun = getNextRunFromExpr(schedule.cron_expr)?.toISOString()
+    updateSchedule(alias, {
+      next_run_at: newNextRun,
+      last_run_at: new Date().toISOString(),
+      last_run_id: run_id,
+      last_status: execResult.status,
+    })
+  }
+
+  logRun({ type: 'schedule_trigger', run_id, alias, status: execResult.status, duration_ms: Date.now() - t0 })
+
+  return c.json({
+    ok: true,
+    run_id,
+    alias,
+    status: execResult.status,
+    result: execResult.result,
+    webhook_sent: !!schedule?.webhook,
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scheduler background loop
+// Checks every 60 seconds for schedules that are due to run.
+// ---------------------------------------------------------------------------
+async function runScheduler() {
+  const schedules = listSchedules()
+  const now = new Date()
+  for (const schedule of schedules) {
+    if (!schedule.active) continue
+    if (!schedule.next_run_at) continue
+    const nextRun = new Date(schedule.next_run_at)
+    if (nextRun > now) continue
+
+    const patch = getPatch(schedule.alias)
+    if (!patch) {
+      logRun({ type: 'schedule_error', alias: schedule.alias, error: 'patch not found' })
+      continue
+    }
+
+    const run_id = makeRunId()
+    const t0 = Date.now()
+
+    insertRun(run_id, schedule.alias, patch.graph, null, 'scheduled')
+
+    // Compute next run before firing, so overlapping runs don't queue
+    const newNextRun = getNextRunFromExpr(schedule.cron_expr)?.toISOString()
+
+    // Fire-and-forget execution
+    ;(async () => {
+      try {
+        const execResult = await executeGraph(patch.graph as any, nodeSpec, run_id, 'none')
+        updateRunStatus(run_id, execResult.status)
+        const { nodeRecords: _nr, ...resp } = execResult
+        insertResponse(run_id, resp)
+
+        // Send webhook if configured
+        if (schedule.webhook) {
+          const whResult = await sendWebhook(schedule.webhook, {
+            event: 'scheduled_run',
+            run_id,
+            alias: schedule.alias,
+            status: execResult.status,
+            result: execResult.result,
+            run_at: new Date().toISOString(),
+          })
+          if (!whResult.ok) {
+            logRun({ type: 'webhook_failure', alias: schedule.alias, run_id, error: whResult.error })
+          }
+        }
+
+        updateSchedule(schedule.alias, {
+          next_run_at: newNextRun,
+          last_run_at: new Date().toISOString(),
+          last_run_id: run_id,
+          last_status: execResult.status,
+        })
+
+        logRun({ type: 'schedule_run', run_id, alias: schedule.alias, status: execResult.status, duration_ms: Date.now() - t0 })
+      } catch (err) {
+        updateRunStatus(run_id, 'error')
+        updateSchedule(schedule.alias, { next_run_at: newNextRun, last_run_at: new Date().toISOString(), last_run_id: run_id, last_status: 'error' })
+        logRun({ type: 'schedule_error', run_id, alias: schedule.alias, error: String(err), duration_ms: Date.now() - t0 })
+      }
+    })()
+  }
+}
+
+// Start scheduler loop (every 60 seconds)
+setInterval(() => {
+  runScheduler().catch(err => {
+    console.error('Scheduler error:', err)
+  })
+}, 60000)
 
 // ---------------------------------------------------------------------------
 // Catch-all 404 — converts any unknown path into a useful pointer to GET /
