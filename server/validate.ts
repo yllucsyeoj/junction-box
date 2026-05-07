@@ -271,13 +271,17 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
         // Wirable ports are stored in ports.inputs (not the main "input" port).
         const wirablePort = toSpec.ports.inputs?.find(p => p.name === edge.to_port && p.name !== 'input')
         if (wirablePort && nodeMap.has(edge.from)) {
-          const fromSpec = specMap.get(nodeMap.get(edge.from)!.type)
-          if (fromSpec && !typesCompatible(wirablePort.type, fromSpec.output_type)) {
+          const fromNode = nodeMap.get(edge.from)!
+          const fromSpec = specMap.get(fromNode.type)
+          const outType = fromNode.type === 'const'
+            ? inferConstType(fromNode.params.value)
+            : fromSpec?.output_type ?? 'any'
+          if (fromSpec && !typesCompatible(wirablePort.type, outType)) {
             errors.push({
               node_id: edge.to,
               type: toNode.type,
               error_type: 'type_mismatch',
-              message: `Node "${edge.from}" (${fromSpec.name}) outputs "${fromSpec.output_type}" but "${toNode.type}" --${edge.to_port} expects "${wirablePort.type}".`,
+              message: `Node "${edge.from}" (${fromSpec.name}) outputs "${outType}" but "${toNode.type}" --${edge.to_port} expects "${wirablePort.type}".`,
               suggestion: `Check the type of your wired connection — ${edge.to_port} on ${toNode.type} requires "${wirablePort.type}" input.`,
             })
           }

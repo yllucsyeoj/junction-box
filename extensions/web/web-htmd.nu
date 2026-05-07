@@ -1,4 +1,4 @@
-# Convert HTML or a URL to Markdown and rich metadata. Use --main to extract only main content, --no-images to strip images, --no-links to strip links, --raw for only markdown string.
+# Convert HTML or a URL to Markdown and rich metadata. Returns {title, markdown, headers, links, images, meta}.
 @category web
 export def "prim-web-htmd" [
     --url: string = ""        # [wirable][required] URL to fetch and convert

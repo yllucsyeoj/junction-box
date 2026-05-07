@@ -30,6 +30,7 @@ export type SSEEvent =
   | { node_id: string; status: 'done'; output: string }
   | { node_id: string; status: 'error'; error: string; error_type: string; expected_type?: string; got_type?: string }
   | { node_id: string; status: 'skipped'; reason: string }
+  | { node_id: string; status: 'warning'; message: string }
   | { status: 'complete' }
 
 export interface NodeRunRecord {
@@ -139,7 +140,7 @@ function normalizeNuError(
   // Build improved message with all available context
   let message = core
   if (got_type) message += ` (got: ${got_type})`
-  if (expectedType && expectedType !== 'any') message += ` (expected: ${expectedType})`
+  if (error_type === 'type_mismatch' && expectedType && expectedType !== 'any') message += ` (expected: ${expectedType})`
   if (nodeHint) message += ` — ${nodeHint}`
   if (paramHint) message += paramHint
 
@@ -147,7 +148,7 @@ function normalizeNuError(
     message,
     error_type,
   }
-  if (expectedType && expectedType !== 'any') result.expected_type = expectedType
+  if (error_type === 'type_mismatch' && expectedType && expectedType !== 'any') result.expected_type = expectedType
   if (got_type) result.got_type = got_type
   return result
 }
@@ -188,7 +189,7 @@ export async function runPipeline(
     // If any upstream dependency failed, skip this node rather than running it with null input
     const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
     const upstreamFailed = inputEdge ? failed.has(inputEdge.from) : false
-    if (upstreamFailed && node.type !== 'catch') {
+    if (upstreamFailed) {
       emit({ node_id: nodeId, status: 'skipped', reason: `Upstream node "${inputEdge.from}" failed or was skipped.` })
       failed.add(nodeId)
       outputs.set(nodeId, 'null')
@@ -200,10 +201,6 @@ export async function runPipeline(
 
     // inputEdge already found above for skipping logic — reuse it here
     const pipelineInput = inputEdge ? (outputs.get(inputEdge.from) ?? null) : null
-
-    // If this is a catch node and upstream failed, pass the upstream error via env var
-    // so prim-catch can invoke the handler instead of skipping entirely
-    const upstreamError = upstreamFailed ? errors.get(inputEdge!.from) : undefined
 
     // Resolve params — edge-connected params come from env vars.
     // Collect all param names: both statically set AND wired-only (absent from node.params).
@@ -254,9 +251,6 @@ export async function runPipeline(
     // would break Nu string-literal embedding; env vars handle arbitrary content safely.
     const PIPE_IN = 'GONUDE_PIPE_IN'
     if (pipelineInput !== null) paramEnv[PIPE_IN] = pipelineInput
-    if (node.type === 'catch' && upstreamError) {
-      paramEnv['GONUDE_UPSTREAM_ERROR'] = JSON.stringify(upstreamError)
-    }
     const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
     // All nodes serialize to JSON — clean for API consumers and jq-able directly.
     const serialize = '| to json'
@@ -315,6 +309,16 @@ export async function runPipeline(
       outputs.set(nodeId, stdout)
       emit({ node_id: nodeId, status: 'done', output: stdout })
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'done', duration_ms: Date.now() - nodeStart })
+      if (node.type === 'join') {
+        try {
+          const result = JSON.parse(stdout)
+          if (Array.isArray(result) && result.length === 0) {
+            emit({ node_id: nodeId, status: 'warning', message: 'join returned an empty array — check that the "on" column exists in both tables and that column names match exactly.' })
+          }
+        } catch {
+          // stdout wasn't JSON — ignore
+        }
+      }
     }
   }
 

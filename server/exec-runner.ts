@@ -24,6 +24,7 @@ export async function executeGraph(
   const outputs: Record<string, string> = {}
   const errors: Record<string, { message: string; error_type: string }> = {}
   const skipped: string[] = []
+  const runtimeWarnings: { node_id: string; message: string }[] = []
   let fatalError: string | null = null
   let nodeRecords: NodeRunRecord[] = []
   let validationWarnings: any[] = []
@@ -50,6 +51,7 @@ export async function executeGraph(
         if (event.status === 'done') outputs[event.node_id] = event.output
         if (event.status === 'error') errors[event.node_id] = { message: event.error, error_type: event.error_type, ...(event.expected_type ? { expected_type: event.expected_type } : {}), ...(event.got_type ? { got_type: event.got_type } : {}) }
         if (event.status === 'skipped') skipped.push(event.node_id)
+        if (event.status === 'warning') runtimeWarnings.push({ node_id: event.node_id, message: event.message })
       }
       if ('status' in event && event.status === 'fatal') {
         fatalError = (event as { status: 'fatal'; error: string }).error
@@ -77,7 +79,7 @@ export async function executeGraph(
       status: 'error',
       run_id: runId,
       validation_errors: [],
-      warnings: validationWarnings,
+      warnings: [...validationWarnings, ...runtimeWarnings],
       errors,
       fatal: fatalError,
       skipped: outputsMode !== 'none' ? skipped : [],
@@ -91,7 +93,7 @@ export async function executeGraph(
     status: 'complete',
     run_id: runId,
     validation_errors: [],
-    warnings: validationWarnings,
+    warnings: [...validationWarnings, ...runtimeWarnings],
     errors: {},
     fatal: null,
     skipped: outputsMode !== 'none' ? skipped : [],

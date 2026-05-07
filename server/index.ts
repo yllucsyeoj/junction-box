@@ -91,9 +91,16 @@ function injectParams(graph: GraphForInject, params: Record<string, unknown>): G
     if (!match) return node
     const key = match[1]
     if (!(key in params)) return node
-    // Wrap string values in NUON quotes; other types pass through as-is
+    // Wrap string values in NUON quotes; serialize objects/arrays as JSON; other types pass through as-is
     const raw = params[key]
-    const nuonValue = typeof raw === 'string' ? `"${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : String(raw)
+    let nuonValue: string
+    if (typeof raw === 'string') {
+      nuonValue = `"${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+    } else if (typeof raw === 'object' && raw !== null) {
+      nuonValue = JSON.stringify(raw)
+    } else {
+      nuonValue = String(raw)
+    }
     return { ...node, params: { ...node.params, value: nuonValue } }
   })
   return { ...graph, nodes }
@@ -219,7 +226,7 @@ app.get('/', (c) => c.json({
     transform: { description: 'Filter rows, sort, select columns, extract fields, map, reduce, join tables, group, window', color: '#3b82f6' },
     compute:   { description: 'Math, string ops, type conversion, encoding/decoding, hashing, each (list transform)', color: '#eab308' },
     datetime:  { description: 'Current time, format dates, parse dates, timezone conversion', color: '#06b6d4' },
-    logic:     { description: 'Conditionals (if), loops (for/while), error handling (try/catch), pattern matching', color: '#ec4899' },
+    logic:     { description: 'Conditionals (if), loops (for/while), pattern matching', color: '#ec4899' },
     output:    { description: 'Return (pipeline result), display (debug), to-json/csv/text (serialize)', color: '#22c55e' },
     file:      { description: 'ls, glob, mkdir, rm, path-join, path-parse', color: '#f97316' },
     external:  { description: 'HTTP POST/PUT/DELETE/PATCH, LLM calls, analyze', color: '#a855f7' },
@@ -628,6 +635,61 @@ app.get('/patterns', (c) => c.json({
     },
   ],
 }))
+
+// ---------------------------------------------------------------------------
+// POST /validate — standalone validation endpoint
+// Accepts the same body as POST /exec (graph or alias+params), runs
+// validateGraph, and returns {valid, errors, warnings} without executing.
+// ---------------------------------------------------------------------------
+app.post('/validate', async (c) => {
+  const contentType = c.req.header('content-type') ?? ''
+  let graph: unknown
+  let alias: string | null = null
+
+  if (contentType.includes('application/json')) {
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ valid: false, errors: [], warnings: [], fatal: 'Request body is not valid JSON.' }, 400)
+    }
+    if (body && typeof body === 'object' && 'alias' in body) {
+      alias = String((body as any).alias)
+      const patch = getPatch(alias)
+      if (!patch) {
+        return c.json({ valid: false, errors: [], warnings: [], fatal: `Patch alias "${alias}" not found.` }, 404)
+      }
+      const runtimeParams = (body as any).params
+      if (runtimeParams && typeof runtimeParams === 'object') {
+        graph = injectParams(patch.graph as any, runtimeParams)
+      } else {
+        graph = patch.graph
+      }
+    } else {
+      graph = body
+    }
+  } else {
+    const nuonText = await c.req.text()
+    const parsed = nuonToGraph(nuonText)
+    if (!parsed.ok) {
+      return c.json({ valid: false, errors: [], warnings: [], fatal: `NUON parse error: ${parsed.error}` }, 400)
+    }
+    graph = parsed.graph
+  }
+
+  if (!graph || typeof graph !== 'object' || !Array.isArray((graph as any).nodes)) {
+    return c.json({ valid: false, errors: [], warnings: [], fatal: 'Request body must be a graph object: {nodes: [...], edges: [...]}.' }, 400)
+  }
+  if (!Array.isArray((graph as any).edges)) {
+    (graph as any).edges = []
+  }
+  if ((graph as any).nodes.length === 0) {
+    return c.json({ valid: false, errors: [], warnings: [], fatal: 'Graph has no nodes.' }, 400)
+  }
+
+  const { errors, warnings } = validateGraph(graph as any, nodeSpec)
+  return c.json({ valid: errors.length === 0, errors, warnings })
+})
 
 // ---------------------------------------------------------------------------
 // POST /exec — synchronous agent endpoint
