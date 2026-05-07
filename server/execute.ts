@@ -281,7 +281,7 @@ export async function runPipeline(
     // All nodes serialize to JSON — clean for API consumers and jq-able directly.
     const serialize = '| to json'
     // Use $e.json to capture the full nested error structure, not just the outer $e.msg
-    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| "$"__GONUDE_ERROR:($e.json)"" | to json }`
+    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.json)" | to json }`
 
     // Retry loop with exponential backoff
     let attempt = 0
@@ -399,101 +399,7 @@ export async function runPipeline(
       }
     }
   }
-        resolvedFlags.push(`--${paramName} $env.${envKey}`)
-      } else {
-        // Escape string value for Nu — wrap in quotes, escape inner quotes
-        const escaped = String(paramValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-        resolvedFlags.push(`--${paramName} "${escaped}"`)
-      }
-    }
 
-    // Build Nu invocation
-    const flagStr = resolvedFlags.join(' ')
-    // Allowlist node.type before embedding in Nu script — defense-in-depth
-    if (!/^[a-z][a-z0-9_-]*$/.test(node.type)) {
-      const errMsg = `Invalid node type "${node.type}" — must match [a-z][a-z0-9_-]*`
-      emit({ node_id: nodeId, status: 'error', error: errMsg, error_type: 'runtime' })
-      failed.add(nodeId)
-      outputs.set(nodeId, 'null')
-      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: errMsg, error_type: 'runtime' })
-      continue
-    }
-    const cmdName = `prim-${node.type.replace(/_/g, '-')}`
-    // Pass pipeline input via env var — to json produces multi-line output which
-    // would break Nu string-literal embedding; env vars handle arbitrary content safely.
-    const PIPE_IN = 'GONUDE_PIPE_IN'
-    if (pipelineInput !== null) paramEnv[PIPE_IN] = pipelineInput
-    const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
-    // All nodes serialize to JSON — clean for API consumers and jq-able directly.
-    const serialize = '| to json'
-    // Use $e.json to capture the full nested error structure, not just the outer $e.msg
-    const nuScript = `${buildUseLines()}; try { ${inputExpr}${cmdName} ${flagStr} ${serialize} } catch {|e| $"__GONUDE_ERROR:($e.json)" | to json }`
-
-    const proc = Bun.spawnSync(
-      ['nu', '-c', nuScript],
-      {
-        cwd: ROOT,
-        env: { ...process.env, ...paramEnv } as Record<string, string>,
-        stderr: 'pipe',
-      }
-    )
-
-    const stdout = Buffer.from(proc.stdout).toString().trim()
-    const stderr = Buffer.from(proc.stderr).toString().trim()
-
-    const nodeSpec = specMap.get(node.type)
-    // input_type is what this node expects to receive — used to annotate type mismatch errors
-    const expectedType = nodeSpec?.input_type
-
-    if (proc.exitCode !== 0) {
-      // Parse/syntax error — Nu couldn't compile the script
-      const { message, error_type, expected_type, got_type } = normalizeNuError(stderr, node.type, node.params, expectedType)
-      const errInfo = { error: message, error_type, expected_type, got_type }
-      errors.set(nodeId, errInfo)
-      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
-      outputs.set(nodeId, 'null')
-      failed.add(nodeId)
-      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
-    } else if (stdout.startsWith('"__GONUDE_ERROR:')) {
-      // Runtime error caught by try/catch wrapper
-      // $e.json is a JSON string inside a JSON string, so parse twice
-      let raw: string
-      try {
-        const outer = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
-        const errObj = JSON.parse(outer)
-        // Recursively find the deepest inner error message
-        let inner = errObj
-        while (inner.inner && inner.inner.length > 0) {
-          inner = inner.inner[0]
-        }
-        raw = inner.msg || errObj.msg || outer
-      } catch {
-        raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
-      }
-      const { message, error_type, expected_type, got_type } = normalizeNuError(raw, node.type, node.params, expectedType)
-      const errInfo = { error: message, error_type, expected_type, got_type }
-      errors.set(nodeId, errInfo)
-      emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
-      outputs.set(nodeId, 'null')
-      failed.add(nodeId)
-      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: message, error_type })
-    } else {
-      outputs.set(nodeId, stdout)
-      emit({ node_id: nodeId, status: 'done', output: stdout })
-      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'done', duration_ms: Date.now() - nodeStart })
-      if (node.type === 'join') {
-        try {
-          const result = JSON.parse(stdout)
-          if (Array.isArray(result) && result.length === 0) {
-            emit({ node_id: nodeId, status: 'warning', message: 'join returned an empty array — check that the "on" column exists in both tables and that column names match exactly.' })
-          }
-        } catch {
-          // stdout wasn't JSON — ignore
-        }
-      }
-    }
-  }
-
-  emit({ status: 'complete' })
+  emit({ status: "complete" })
   return nodeRecords
 }
