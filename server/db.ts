@@ -81,6 +81,15 @@ export function initDb(path?: string): Database {
   // Migration: add next_run_at column if missing (added in schedule support)
   addColumnIfNotExists(db, 'schedules', 'next_run_at', 'TEXT');
 
+  // KV store for inter-pipeline state (kv-get / kv-set nodes)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS kv (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      expires_at INTEGER
+    )
+  `);
+
   _db = db;
   return db;
 }
@@ -382,4 +391,32 @@ export function deleteScheduleByPatch(alias: string): boolean {
   const db = getDb();
   const result = db.prepare('DELETE FROM schedules WHERE alias = ?').run(alias);
   return result.changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// KV store — inter-pipeline persistent state (kv-get / kv-set nodes)
+// ---------------------------------------------------------------------------
+
+export function kvGet(key: string): string | null {
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const row = db.prepare('SELECT value, expires_at FROM kv WHERE key = ?').get(key) as { value: string; expires_at: number | null } | null;
+  if (!row) return null;
+  if (row.expires_at !== null && row.expires_at < now) {
+    db.prepare('DELETE FROM kv WHERE key = ?').run(key);
+    return null;
+  }
+  return row.value;
+}
+
+export function kvSet(key: string, value: string, ttlSeconds?: number): void {
+  const db = getDb();
+  const expiresAt = ttlSeconds !== undefined ? Math.floor(Date.now() / 1000) + ttlSeconds : null;
+  db.prepare('INSERT INTO kv (key, value, expires_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at')
+    .run(key, value, expiresAt);
+}
+
+export function kvDelete(key: string): void {
+  const db = getDb();
+  db.prepare('DELETE FROM kv WHERE key = ?').run(key);
 }

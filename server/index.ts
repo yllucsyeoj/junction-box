@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, listRunResults, extractRequiredParams, insertRun, updateRunStatus, insertResponse, insertSchedule, getSchedule, listSchedules, updateSchedule, deleteSchedule, deleteScheduleByPatch } from './db'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, listRunResults, extractRequiredParams, insertRun, updateRunStatus, insertResponse, insertSchedule, getSchedule, listSchedules, updateSchedule, deleteSchedule, deleteScheduleByPatch, kvGet, kvDelete } from './db'
 import { loadSpec } from './spec'
 import { type NodeRunRecord, type SSEEvent, runPipeline } from './execute'
 import { validateGraph } from './validate'
@@ -232,7 +232,7 @@ app.get('/', (c) => c.json({
   graph_format: {
     example: {
       nodes: [
-        { id: 'src', type: 'const', params: { value: '[1, 2, 3]' } },
+        { id: 'src', type: 'const', params: { value: [1, 2, 3] } },
         { id: 'op', type: 'each', params: { expr: '$in * 2' } },
         { id: 'out', type: 'return', params: {} },
       ],
@@ -322,6 +322,9 @@ app.get('/', (c) => c.json({
     'PATCH /schedules/:alias': 'Update schedule: {active, cron?, webhook?}',
     'DELETE /schedules/:alias': 'Remove a schedule',
     'POST /schedules/:alias/trigger': 'Manually trigger a scheduled patch run',
+    'POST /webhooks/:alias/trigger': 'Inbound webhook: run a patch from an external event. Accepts any JSON body — injected as {payload: <body>} param. Add X-Reference: true header for async mode. Use this URL as the webhook receiver in external systems (GitHub, Stripe, Slack, etc.).',
+    'GET /kv/:key': 'Read a KV store entry by key (same data as kv-get node)',
+    'DELETE /kv/:key': 'Delete a KV store entry by key',
   },
 
   // ── Critical Gotchas ─────────────────────────────────────────────────────
@@ -347,8 +350,8 @@ app.get('/', (c) => c.json({
       solution: 'Wire return last, after all processing nodes.',
     },
     {
-      issue: 'NUON vs JSON for table constants',
-      solution: 'Table syntax: [[col1 col2]; [val1 val2]]. List: [1, 2, 3]. Record: {key: "val"}. Use double quotes inside NUON.',
+      issue: 'Table constants in const node value',
+      solution: 'Use a JSON array of objects: [{"col1": "val1", "col2": "val2"}]. Lists: [1, 2, 3]. Records: {"key": "val"}. All standard JSON — no special syntax required.',
     },
     {
       issue: 'filter.value is always a plain string',
@@ -386,11 +389,11 @@ app.get('/', (c) => c.json({
 
   // ── Value Formats ─────────────────────────────────────────────────────────
   value_formats: {
-    nuon_vs_json: 'NUON is Nushell Object Notation - more readable. Use it for params.',
-    table_syntax: '[[column1 column2]; [row1val1 row1val2] [row2val1 row2val2]]',
-    list_syntax: '[item1, item2, item3] or [1, 2, 3]',
-    record_syntax: '{key: "value", num: 42, list: [1, 2]}',
-    string_quoting: 'Use double quotes inside NUON: "hello" not \'hello\'. For nested quotes, escape: "He said \\"hi\\""',
+    params_format: 'Node params accept standard JSON values — strings, numbers, booleans, arrays, objects. Pass them directly in the JSON body.',
+    table_syntax: 'Tables: JSON array of objects — [{"col1": "val1", "col2": "val2"}, {"col1": "val3", "col2": "val4"}]',
+    list_syntax: 'Lists: standard JSON arrays — [1, 2, 3] or ["a", "b", "c"]',
+    record_syntax: 'Records: standard JSON objects — {"key": "value", "num": 42}',
+    legacy_nuon: 'NUON syntax (e.g. [[col1 col2]; [v1 v2]]) is accepted as a fallback but JSON is preferred.',
   },
 }))
 
@@ -912,6 +915,15 @@ app.post('/exec', async (c) => {
         try {
           const result = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any, emit)
           emit({ status: 'complete', run_id, result: result.result, errors: result.errors, warnings: result.warnings })
+          // Persist SSE runs to SQLite — same as synchronous exec path
+          const { nodeRecords, ...resp } = result
+          try {
+            insertRun(run_id, alias, graph, null, resp.status)
+            insertResponse(run_id, resp)
+          } catch (err) {
+            console.error('Failed to store SSE run/response:', err)
+          }
+          logRun({ type: 'exec', run_id, alias, status: resp.status, node_count: (graph as any)?.nodes?.length ?? 0, duration_ms: Date.now() - t0 }, nodeRecords)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           emit({ status: 'fatal', error: msg, run_id })
@@ -1609,6 +1621,86 @@ app.post('/schedules/:alias/trigger', async (c) => {
     result: execResult.result,
     webhook_sent: !!schedule?.webhook,
   })
+})
+
+// ---------------------------------------------------------------------------
+// POST /webhooks/:alias/trigger — inbound webhook: run a patch from external event
+// Accepts any JSON body. Injects body as {payload: <body>} param if the patch
+// uses __param__:payload. Supports X-Reference: true for async mode.
+// ---------------------------------------------------------------------------
+app.post('/webhooks/:alias/trigger', async (c) => {
+  const alias = c.req.param('alias')
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+
+  let payload: unknown = null
+  try {
+    payload = await c.req.json()
+  } catch {
+    // Non-JSON body — treat as null payload
+  }
+
+  const run_id = makeRunId()
+  const t0 = Date.now()
+  const referenceMode = c.req.header('x-reference') === 'true'
+
+  // Inject payload as __param__:payload if the patch uses it
+  const graph = injectParams(patch.graph as any, { payload })
+
+  if (referenceMode) {
+    insertRun(run_id, alias, graph, null, 'pending')
+    ;(async () => {
+      try {
+        const result = await executeGraph(graph, nodeSpec, run_id, 'none')
+        updateRunStatus(run_id, result.status)
+        const { nodeRecords: _nr, ...resp } = result
+        insertResponse(run_id, resp)
+        logRun({ type: 'webhook_trigger', run_id, alias, status: result.status, duration_ms: Date.now() - t0 })
+      } catch (err) {
+        updateRunStatus(run_id, 'error')
+        logRun({ type: 'webhook_trigger', run_id, alias, status: 'error', fatal: String(err), duration_ms: Date.now() - t0 })
+      }
+    })()
+    return c.json({ status: 'pending', run_id, alias })
+  }
+
+  insertRun(run_id, alias, graph, null, 'pending')
+  const execResult = await executeGraph(graph, nodeSpec, run_id, 'none')
+  updateRunStatus(run_id, execResult.status)
+  const { nodeRecords: _nr, ...resp } = execResult
+  insertResponse(run_id, resp)
+  logRun({ type: 'webhook_trigger', run_id, alias, status: execResult.status, duration_ms: Date.now() - t0 })
+
+  return c.json({
+    ok: true,
+    run_id,
+    alias,
+    status: execResult.status,
+    result: execResult.result,
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /kv/:key — read a KV store entry
+// DELETE /kv/:key — delete a KV store entry
+// ---------------------------------------------------------------------------
+app.get('/kv/:key', (c) => {
+  const key = c.req.param('key')
+  const value = kvGet(key)
+  if (value === null) {
+    return c.json({ key, found: false, value: null }, 404)
+  }
+  let parsed: unknown = value
+  try { parsed = JSON.parse(value) } catch {}
+  return c.json({ key, found: true, value: parsed })
+})
+
+app.delete('/kv/:key', (c) => {
+  const key = c.req.param('key')
+  kvDelete(key)
+  return c.json({ ok: true, key })
 })
 
 // ---------------------------------------------------------------------------

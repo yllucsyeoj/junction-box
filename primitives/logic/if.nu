@@ -17,6 +17,6 @@ export def "prim-if" [
         "is-not-empty" => { not ($subject | is-empty) }
         _ => { error make {msg: $"Unknown op: ($op). Valid: ==, !=, >, <, is-empty, is-not-empty"} }
     }
-    let fallback_val = try { $fallback | from nuon } catch { $fallback }
+    let fallback_val = try { $fallback | from json } catch { try { $fallback | from nuon } catch { $fallback } }
     if $passes { $v } else { $fallback_val }
 }

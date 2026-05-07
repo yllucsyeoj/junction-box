@@ -166,10 +166,21 @@ function normalizeNuError(
   return result
 }
 
+// Optional handler for special built-in nodes (patch-call, kv-get, kv-set) that
+// need access to TypeScript services (DB, executeGraph). Returns the JSON-serialized
+// result string, or null to fall through to normal Nu execution.
+export type SpecialNodeRunner = (
+  nodeId: string,
+  nodeType: string,
+  params: Record<string, unknown>,
+  pipelineInput: string | null
+) => Promise<string | null>
+
 export async function runPipeline(
   graph: Graph,
   emit: (event: SSEEvent) => void,
-  specs: NodeSpec[] = []
+  specs: NodeSpec[] = [],
+  specialNodeRunner?: SpecialNodeRunner
 ): Promise<NodeRunRecord[]> {
   const specMap = new Map<string, NodeSpec>()
   for (const s of specs) {
@@ -222,6 +233,17 @@ export async function runPipeline(
     // inputEdge already found above for skipping logic — reuse it here
     const pipelineInput = inputEdge ? (outputs.get(inputEdge.from) ?? null) : null
 
+    // Special nodes (patch-call, kv-get, kv-set) handled by TypeScript, not Nu
+    if (specialNodeRunner) {
+      const specialResult = await specialNodeRunner(nodeId, node.type, node.params ?? {}, pipelineInput)
+      if (specialResult !== null) {
+        outputs.set(nodeId, specialResult)
+        emit({ node_id: nodeId, status: 'done', output: specialResult, duration_ms: Date.now() - nodeStart })
+        nodeRecords.push({ node_id: nodeId, type: node.type, status: 'done', duration_ms: Date.now() - nodeStart })
+        continue
+      }
+    }
+
     // Resolve params — edge-connected params come from env vars.
     // Collect all param names: both statically set AND wired-only (absent from node.params).
     const paramEnv: Record<string, string> = {}
@@ -255,8 +277,9 @@ export async function runPipeline(
         }
         resolvedFlags.push(`--${paramName} $env.${envKey}`)
       } else {
-        // Escape string value for Nu — wrap in quotes, escape inner quotes
-        const escaped = String(paramValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        // Serialize to string for Nu — preserve JSON structure for arrays/objects
+        const raw = typeof paramValue === 'string' ? paramValue : JSON.stringify(paramValue)
+        const escaped = raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
         resolvedFlags.push(`--${paramName} "${escaped}"`)
       }
     }
@@ -293,19 +316,32 @@ export async function runPipeline(
     const retryableTypes = new Set(['network_error', 'rate_limited', 'upstream_error'])
 
     while (attempt <= maxRetries) {
-      const spawnStart = Date.now()
-      const proc = Bun.spawnSync(
+      const proc = Bun.spawn(
         ['nu', '-c', nuScript],
         {
           cwd: ROOT,
           env: { ...process.env, ...paramEnv, GONUDE_TIMEOUT_MS: String(timeoutMs), GONUDE_RETRIES: String(maxRetries) } as Record<string, string>,
+          stdout: 'pipe',
           stderr: 'pipe',
-          timeout: timeoutMs,
         }
       )
-      stdout = Buffer.from(proc.stdout).toString().trim()
-      stderr = Buffer.from(proc.stderr).toString().trim()
-      exitCode = proc.exitCode ?? 1
+
+      // Use a timeout race — Bun.spawn has no built-in timeout param
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
+      const exitedPromise = proc.exited.then(() => proc.exitCode ?? 1)
+      const raceResult = await Promise.race([exitedPromise, timeoutPromise])
+
+      if (raceResult === null) {
+        // Timed out — kill the process
+        try { proc.kill() } catch {}
+        stdout = ''
+        stderr = `Process timed out after ${timeoutMs}ms`
+        exitCode = 1
+      } else {
+        exitCode = raceResult as number
+        stdout = (await new Response(proc.stdout).text()).trim()
+        stderr = (await new Response(proc.stderr).text()).trim()
+      }
 
       const nodeSpec = specMap.get(node.type)
       const expectedType = nodeSpec?.input_type
