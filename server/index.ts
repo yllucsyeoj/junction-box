@@ -23,6 +23,24 @@ function makeRunId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+// Utility: return a fatal SSE response for pre-execution errors
+function sseFatal(payload: Record<string, unknown>, run_id: string): Response {
+  const encoder = new TextEncoder()
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'fatal', run_id, ...payload })}\n\n`))
+      controller.close()
+    }
+  })
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  })
+}
+
 // Ensure data directory exists (important for fresh Docker volumes)
 mkdirSync(DATA_DIR, { recursive: true })
 
@@ -251,16 +269,23 @@ app.get('/', (c) => c.json({
   endpoints: {
     'GET /': 'This manifest — comprehensive guide for LLMs',
     'GET /health': 'Server status, uptime, primitive count',
-    'GET /catalog': `Token-efficient node index (${nodeSpec.filter(s => s.category !== 'example').length} nodes) — name, category, types, hint, wirable_params. Supports ?category= filter. Start here.`,
+    'GET /catalog': `Token-efficient node index (${nodeSpec.filter(s => s.category !== 'example').length} nodes) — name, category, types, hint, wirable_params. Supports ?category=, ?accepts=, ?produces= filters. Start here.`,
     'GET /catalog?category=X': 'Filter catalog by category. Core: input, transform, compute, datetime, logic, output, file, external. Data sources: hn, reddit, wikipedia, youtube, github, rss, web, market, coingecko, feargreed, sec, fred, bls, template.',
+    'GET /catalog?accepts=table': 'Filter nodes that accept table input. Also: ?accepts=record, ?accepts=list, ?accepts=string, ?accepts=number.',
+    'GET /catalog?produces=list': 'Filter nodes that produce list output. Also: ?produces=table, ?produces=record, ?produces=string.',
+    'GET /catalog?category=transform&accepts=table': 'Combined filters — nodes in transform category that accept table input.',
     'GET /defs': `All node types — WARNING: large. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details. Returns name, type (same value), params, ports, wirable_params, example.',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs. Add Accept: text/event-stream header for SSE streaming.',
+    'POST /exec (SSE mode)': 'Add header Accept: text/event-stream → streams per-node events: running, done, retry, error, complete. Includes duration_ms and retry attempts.',
     'POST /exec (reference mode)': 'Add header X-Reference: true → returns {status: "pending", run_id: "..."} immediately. Execute GET /runs/:run_id later to fetch result.',
     'POST /patch': 'Save a validated graph: {alias, description, graph}',
     'GET /patches': 'List all saved patches (stored in SQLite)',
     'GET /patch/:alias': 'Get a saved patch by alias',
+    'GET /patch/:alias/params': 'Introspect patch parameters — returns {alias, params, has_wired_params, wired_defaults}',
+    'GET /patch/:alias/explain': 'Generate a natural language explanation of what the patch does, using LLM',
+    'POST /preview': 'Dry-run a patch with truncated outputs and LLM placeholders — body: {alias, params?, max_rows: 3}',
     'DELETE /patch/:alias': 'Delete a saved patch',
     'GET /visualise/:alias': 'Render a saved patch as an ASCII flowchart diagram — useful for visualizing dataflow pipelines before running',
     'GET /runs': 'List all runs with optional filters: ?patch_alias=X&limit=50&offset=0 (all runs stored in SQLite)',
@@ -369,6 +394,8 @@ app.get('/nodes', (c) => c.json(nodeSpec))
 app.get('/catalog', (c) => {
   const rawFilter = c.req.query('category')
   const categoryFilter = rawFilter?.toLowerCase()
+  const acceptsFilter = c.req.query('accepts')?.toLowerCase()
+  const producesFilter = c.req.query('produces')?.toLowerCase()
   const validCategories = [...new Set(nodeSpec.filter(s => s.category !== 'example').map(s => s.category))]
 
   if (categoryFilter && !validCategories.includes(categoryFilter)) {
@@ -381,6 +408,8 @@ app.get('/catalog', (c) => {
   const catalog = nodeSpec
     .filter(s => s.category !== 'example')  // template artifacts, not real nodes
     .filter(s => !categoryFilter || s.category === categoryFilter)
+    .filter(s => !acceptsFilter || s.input_type === acceptsFilter || s.input_type === 'any')
+    .filter(s => !producesFilter || s.output_type === producesFilter || s.output_type === 'any')
     .map(s => ({
       name: s.name,
       category: s.category,
@@ -717,6 +746,8 @@ app.post('/validate', async (c) => {
 app.post('/exec', async (c) => {
   const contentType = c.req.header('content-type') ?? ''
   const outputsMode = c.req.query('outputs') ?? 'none'  // 'none' (default) | 'full'
+  const accept = c.req.header('accept') ?? ''
+  const sseMode = accept.includes('text/event-stream')
   const run_id = makeRunId()
   const t0 = Date.now()
 
@@ -729,10 +760,12 @@ app.post('/exec', async (c) => {
       body = await c.req.json()
     } catch {
       logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'json_parse_error', duration_ms: Date.now() - t0 })
-      return c.json({
+      const resp = {
         status: 'error', run_id, fatal: 'Request body is not valid JSON.',
         validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
-      }, 400)
+      }
+      if (sseMode) return sseFatal(resp, run_id)
+      return c.json(resp, 400)
     }
     // Support alias shorthand: {"alias": "my-patch"} or {"alias": "...", "params": {...}}
     if (body && typeof body === 'object' && 'alias' in body) {
@@ -740,7 +773,9 @@ app.post('/exec', async (c) => {
       const patch = getPatch(alias)
       if (!patch) {
         logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'patch_not_found', duration_ms: Date.now() - t0 })
-        return c.json({ status: 'error', run_id, fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 404)
+        const resp = { status: 'error', run_id, fatal: `Patch alias "${alias}" not found. Use GET /patches to list available patches.`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }
+        if (sseMode) return sseFatal(resp, run_id)
+        return c.json(resp, 404)
       }
       // Apply runtime params: inject into const nodes whose value matches __param__:fieldname
       const runtimeParams = (body as any).params
@@ -758,7 +793,9 @@ app.post('/exec', async (c) => {
     const parsed = nuonToGraph(nuonText)
     if (!parsed.ok) {
       logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'nuon_parse_error', duration_ms: Date.now() - t0 })
-      return c.json({ status: 'error', run_id, fatal: `NUON parse error: ${parsed.error}`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }, 400)
+      const resp = { status: 'error', run_id, fatal: `NUON parse error: ${parsed.error}`, errors: {}, validation_errors: [], skipped: [], outputs: {}, result: null }
+      if (sseMode) return sseFatal(resp, run_id)
+      return c.json(resp, 400)
     }
     graph = parsed.graph
   }
@@ -766,11 +803,13 @@ app.post('/exec', async (c) => {
   // Ensure graph has the expected shape before passing to validator
   if (!graph || typeof graph !== 'object' || !Array.isArray((graph as any).nodes)) {
     logRun({ type: 'exec', run_id, alias, status: 'error', fatal: 'bad_graph_shape', duration_ms: Date.now() - t0 })
-    return c.json({
+    const resp = {
       status: 'error', run_id,
       fatal: 'Request body must be a graph object: {nodes: [...], edges: [...]}.',
       validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
-    }, 400)
+    }
+    if (sseMode) return sseFatal(resp, run_id)
+    return c.json(resp, 400)
   }
 
   // Default edges to [] — a single const node with no edges is a valid (if trivial) pipeline
@@ -780,21 +819,25 @@ app.post('/exec', async (c) => {
 
   // Empty graph — nothing to execute
   if ((graph as any).nodes.length === 0) {
-    return c.json({
+    const resp = {
       status: 'error', run_id,
       fatal: 'Graph has no nodes. Add at least one node to execute.',
       validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
-    }, 400)
+    }
+    if (sseMode) return sseFatal(resp, run_id)
+    return c.json(resp, 400)
   }
 
   // Detect unresolved __param__ placeholders — prevents silent literal-string queries
   const missingParams = detectMissingParams(graph as GraphForInject)
   if (missingParams.length > 0) {
-    return c.json({
+    const resp = {
       status: 'error', run_id,
       fatal: `${alias ? `Patch "${alias}"` : 'Graph'} requires params: ${missingParams.join(', ')}. Pass them as {"alias": "...", "params": {"${missingParams[0]}": "value"}}.`,
       validation_errors: [], errors: {}, skipped: [], outputs: {}, result: null,
-    }, 422)
+    }
+    if (sseMode) return sseFatal(resp, run_id)
+    return c.json(resp, 422)
   }
 
   const referenceMode = c.req.header('x-reference') === 'true' || c.req.query('reference') === 'true'
@@ -803,7 +846,9 @@ app.post('/exec', async (c) => {
     try {
       insertRun(run_id, alias, graph, null, 'pending')
     } catch (err) {
-      return c.json({ status: 'error', run_id, fatal: 'Failed to create run record' }, 500)
+      const resp = { status: 'error', run_id, fatal: 'Failed to create run record' }
+      if (sseMode) return sseFatal(resp, run_id)
+      return c.json(resp, 500)
     }
 
     const execGraph = graph as any
@@ -828,6 +873,34 @@ app.post('/exec', async (c) => {
     return c.json({ status: 'pending', run_id })
   }
 
+  // SSE streaming mode
+  if (sseMode) {
+    const encoder = new TextEncoder()
+    const body = new ReadableStream({
+      async start(controller) {
+        const emit = (event: any) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+        }
+        try {
+          const result = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any, emit)
+          emit({ status: 'complete', run_id, result: result.result, errors: result.errors, warnings: result.warnings })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          emit({ status: 'fatal', error: msg, run_id })
+        } finally {
+          controller.close()
+        }
+      }
+    })
+    return new Response(body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      }
+    })
+  }
+
   const execResult = await executeGraph(graph as any, nodeSpec, run_id, outputsMode as any)
   const { nodeRecords, ...resp } = execResult
 
@@ -850,6 +923,71 @@ app.post('/exec', async (c) => {
 })
 
 // ---------------------------------------------------------------------------
+// POST /preview — dry-run a patch with truncated outputs and placeholder LLMs
+// Body: {alias, params?, max_rows: 3}
+// Returns per-node outputs truncated to max_rows, with LLM nodes skipped.
+// ---------------------------------------------------------------------------
+app.post('/preview', async (c) => {
+  const body = await c.req.json()
+  const { alias, params: runtimeParams, max_rows } = body
+  const limit = Math.min(Math.max(1, Number(max_rows ?? 3)), 50)
+  const run_id = makeRunId()
+
+  if (!alias || typeof alias !== 'string') {
+    return c.json({ status: 'error', error: 'alias is required' }, 400)
+  }
+
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+
+  let graph = patch.graph as GraphForInject
+  if (runtimeParams && typeof runtimeParams === 'object') {
+    graph = injectParams(graph, runtimeParams)
+  }
+
+  const missing = detectMissingParams(graph)
+  if (missing.length > 0) {
+    return c.json({ status: 'error', error: `Patch requires params: ${missing.join(', ')}` }, 422)
+  }
+
+  // Replace llm nodes with const placeholders; keep display nodes as-is (passthrough)
+  const previewGraph: GraphForInject = {
+    nodes: graph.nodes.map(node => {
+      if (node.type === 'llm') {
+        return { ...node, type: 'const', params: { value: '"[LLM output placeholder]"' } }
+      }
+      return node
+    }),
+    edges: graph.edges,
+  }
+
+  const result = await executeGraph(previewGraph, nodeSpec, run_id, 'full')
+
+  // Truncate table/list outputs
+  const truncatedOutputs: Record<string, unknown> = {}
+  for (const [nodeId, value] of Object.entries(result.outputs)) {
+    if (Array.isArray(value)) {
+      truncatedOutputs[nodeId] = value.slice(0, limit)
+    } else {
+      truncatedOutputs[nodeId] = value
+    }
+  }
+
+  return c.json({
+    status: result.status,
+    alias,
+    run_id,
+    max_rows: limit,
+    llm_skipped: graph.nodes.some(n => n.type === 'llm'),
+    outputs: truncatedOutputs,
+    errors: result.errors,
+    warnings: result.warnings,
+  })
+})
+
+// ---------------------------------------------------------------------------
 // POST /patch — store a patch with an alias
 // GET  /patch/:alias — retrieve a stored patch
 // GET  /patches — list all stored patches (alias, description, node_types, created_at)
@@ -857,7 +995,7 @@ app.post('/exec', async (c) => {
 // ---------------------------------------------------------------------------
 app.post('/patch', async (c) => {
   const body = await c.req.json()
-  const { alias, description, graph } = body
+  const { alias, description, graph, input_schema, output_description, tags } = body
 
   if (!alias || typeof alias !== 'string' || !/^[a-z0-9_-]+$/.test(alias)) {
     return c.json({ error: 'alias must be a lowercase alphanumeric string (hyphens/underscores ok)' }, 400)
@@ -875,7 +1013,36 @@ app.post('/patch', async (c) => {
     return c.json({ error: 'Graph validation failed — patch not stored.', validation_errors: validationErrors }, 422)
   }
 
-  const updated = upsertPatch(alias, description.trim(), graph)
+  // Patch-level validation: required params must be static or wired to __param__:
+  const missingRequiredParams: string[] = []
+  for (const node of (graph as GraphForInject).nodes) {
+    const spec = nodeSpec.find(s => s.name === node.type || s.name === node.type.replace(/_/g, '-'))
+    if (!spec) continue
+    for (const p of spec.params) {
+      if (!p.required) continue
+      const hasStaticValue = node.params[p.name] !== undefined && node.params[p.name] !== ''
+      const wiredEdges = (graph as GraphForInject).edges.filter(e => e.to === node.id && e.to_port === p.name)
+      const hasParamWire = wiredEdges.some(e => {
+        const fromNode = (graph as GraphForInject).nodes.find(n => n.id === e.from)
+        if (!fromNode || fromNode.type !== 'const') return false
+        const val = String(fromNode.params.value ?? '')
+        return val.startsWith('__param__:')
+      })
+      if (!hasStaticValue && !hasParamWire) {
+        missingRequiredParams.push(`${node.id}.${p.name}`)
+      }
+    }
+  }
+  if (missingRequiredParams.length > 0) {
+    return c.json({
+      error: 'Patch save validation failed — required params must be static or wired to __param__: placeholders.',
+      missing_params: missingRequiredParams,
+      hint: 'Set static values or wire __param__:name const nodes for required params.',
+    }, 422)
+  }
+
+  const tagArray = Array.isArray(tags) ? tags : undefined
+  const updated = upsertPatch(alias, description.trim(), graph, input_schema, output_description, tagArray)
   logRun({ type: 'patch_save', alias })
   return c.json({
     ok: true,
@@ -899,6 +1066,9 @@ app.get('/patch/:alias', (c) => {
     alias: patch.alias,
     description: patch.description,
     required_params: extractRequiredParams(patch.graph),
+    input_schema: patch.input_schema,
+    output_description: patch.output_description,
+    tags: patch.tags,
     graph: patch.graph,
     created_at: patch.created_at,
     _manifest: {
@@ -937,6 +1107,108 @@ app.patch('/patch/:alias', async (c) => {
   return c.json({ ok: true, alias, updated: true })
 })
 
+app.get('/patch/:alias/explain', async (c) => {
+  const alias = c.req.param('alias')
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+
+  const graph = patch.graph as GraphForInject
+  const nodeDescriptions: string[] = []
+  for (const node of graph.nodes) {
+    const spec = nodeSpec.find(s => s.name === node.type || s.name === node.type.replace(/_/g, '-'))
+    const hint = spec?.agent_hint || 'No description available'
+    const params = Object.entries(node.params)
+      .filter(([k, v]) => k !== 'timeout_ms' && k !== 'retries' && v !== '' && v !== undefined)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      .join(', ')
+    nodeDescriptions.push(`- ${node.id} (${node.type}): ${hint}${params ? ` [params: ${params}]` : ''}`)
+  }
+
+  const prompt = `Pipeline: "${patch.alias}"
+Description: ${patch.description}
+
+Nodes:
+${nodeDescriptions.join('\n')}
+
+Summarize what this pipeline does, node by node, and describe the expected output format.`
+
+  const explainGraph = {
+    nodes: [
+      { id: 'prompt', type: 'const', params: { value: JSON.stringify(prompt) } },
+      { id: 'llm', type: 'llm', params: { context: 'You are a pipeline documentation assistant. Be concise and technical.' } },
+      { id: 'out', type: 'return', params: {} },
+    ],
+    edges: [
+      { id: 'e1', from: 'prompt', from_port: 'output', to: 'llm', to_port: 'input' },
+      { id: 'e2', from: 'llm', from_port: 'output', to: 'out', to_port: 'input' },
+    ],
+  }
+
+  const run_id = makeRunId()
+  try {
+    const result = await executeGraph(explainGraph, nodeSpec, run_id, 'none')
+    if (result.status === 'error') {
+      return c.json({ status: 'error', error: 'LLM call failed', details: result.errors, fatal: result.fatal }, 502)
+    }
+    return c.json({
+      alias: patch.alias,
+      description: patch.description,
+      explanation: result.result,
+      node_types: [...new Set(graph.nodes.map(n => n.type))],
+    })
+  } catch (err) {
+    return c.json({ status: 'error', error: err instanceof Error ? err.message : String(err) }, 500)
+  }
+})
+
+app.get('/patch/:alias/params', (c) => {
+  const alias = c.req.param('alias')
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+
+  const graph = patch.graph as GraphForInject
+  const params: Array<{ name: string; type: string; description: string; required: boolean }> = []
+  const wiredDefaults: string[] = []
+
+  for (const node of graph.nodes) {
+    if (node.type !== 'const') continue
+    const val = node.params.value
+    if (typeof val !== 'string') continue
+    const match = val.match(/^__param__:(.+)$/)
+    if (!match) continue
+    const name = match[1]
+    wiredDefaults.push(`__param__:${name}`)
+
+    // Find what this const node is wired to, to get param description
+    let description = `Runtime parameter "${name}"`
+    for (const edge of graph.edges) {
+      if (edge.from !== node.id) continue
+      const toNode = graph.nodes.find(n => n.id === edge.to)
+      if (!toNode) continue
+      const spec = nodeSpec.find(s => s.name === toNode.type || s.name === toNode.type.replace(/_/g, '-'))
+      if (!spec) continue
+      const paramSpec = spec.params.find(p => p.name === edge.to_port)
+      if (paramSpec) {
+        description = paramSpec.description || description
+        break
+      }
+    }
+
+    params.push({ name, type: 'string', description, required: true })
+  }
+
+  return c.json({
+    alias: patch.alias,
+    params,
+    has_wired_params: wiredDefaults.length > 0,
+    wired_defaults: wiredDefaults,
+  })
+})
+
 app.delete('/patch/:alias', (c) => {
   const alias = c.req.param('alias')
   const deleted = deletePatch(alias)
@@ -953,7 +1225,7 @@ app.get('/patches', (c) => {
     patches,
     _manifest: {
       hint: 'Each patch can be visualized with GET /visualise/:alias or run with POST /exec {alias: "name"}',
-      fields: ['alias', 'description', 'node_types', 'node_count', 'created_at'],
+      fields: ['alias', 'description', 'node_types', 'node_count', 'required_params', 'input_schema', 'output_description', 'tags', 'created_at'],
     }
   })
 })
