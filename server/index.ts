@@ -294,7 +294,6 @@ app.get('/', (c) => c.json({
     'GET /logs': 'Recent execution log (JSONL file)',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
     'PATCH /patch/:alias': 'Update an existing patch\'s description or graph',
-    'GET /openapi.json': 'OpenAPI 3.0 specification for this API',
   },
 
   // ── Critical Gotchas ─────────────────────────────────────────────────────
@@ -1345,73 +1344,6 @@ app.post('/parse-nuon', async (c) => {
     return c.json({ status: 'error', error: 'Invalid NUON', detail: parsed.error }, 400)
   }
   return c.json(parsed.graph)
-})
-
-// ---------------------------------------------------------------------------
-// GET /openapi.json — OpenAPI 3.0 specification
-// ---------------------------------------------------------------------------
-app.get('/openapi.json', (c) => {
-  const paths: Record<string, any> = {
-    '/': { get: { summary: 'API manifest', responses: { '200': { description: 'Full API guide' } } } },
-    '/health': { get: { summary: 'Health check', responses: { '200': { description: 'Server status' } } } },
-    '/catalog': { get: { summary: 'Node catalog', parameters: [{ name: 'category', in: 'query', schema: { type: 'string' } }], responses: { '200': { description: 'List of nodes' } } } },
-    '/defs': { get: { summary: 'All node definitions', responses: { '200': { description: 'Full node schemas' } } } },
-    '/defs/{type}': { get: { summary: 'Single node definition', parameters: [{ name: 'type', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Node schema' }, '404': { description: 'Unknown node type' } } } },
-    '/patterns': { get: { summary: 'Pre-built pipeline patterns', responses: { '200': { description: 'Example pipelines' } } } },
-    '/exec': { post: { summary: 'Execute a pipeline', requestBody: { content: { 'application/json': { schema: { oneOf: [{ type: 'object', properties: { nodes: { type: 'array' }, edges: { type: 'array' } } }, { type: 'object', properties: { alias: { type: 'string' }, params: { type: 'object' } } }] } } } }, responses: { '200': { description: 'Execution result' }, '400': { description: 'Invalid request' }, '422': { description: 'Validation error' } } } },
-    '/patch': { post: { summary: 'Create a patch', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { alias: { type: 'string' }, description: { type: 'string' }, graph: { type: 'object' } }, required: ['alias', 'description', 'graph'] } } } }, responses: { '200': { description: 'Patch created' }, '400': { description: 'Invalid input' }, '422': { description: 'Validation failed' } } } },
-    '/patch/{alias}': {
-      get: { summary: 'Get a patch', parameters: [{ name: 'alias', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Patch details' }, '404': { description: 'Not found' } } },
-      patch: { summary: 'Update a patch', parameters: [{ name: 'alias', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { description: { type: 'string' }, graph: { type: 'object' } } } } } }, responses: { '200': { description: 'Patch updated' }, '404': { description: 'Not found' }, '422': { description: 'Validation failed' } } },
-      delete: { summary: 'Delete a patch', parameters: [{ name: 'alias', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Deleted' }, '404': { description: 'Not found' } } },
-    },
-    '/patches': { get: { summary: 'List all patches', responses: { '200': { description: 'Patch list' } } } },
-    '/runs': { get: { summary: 'List runs', parameters: [{ name: 'patch_alias', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer' } }, { name: 'offset', in: 'query', schema: { type: 'integer' } }], responses: { '200': { description: 'Run list' } } } },
-    '/runs/{run_id}': { get: { summary: 'Get a run', parameters: [{ name: 'run_id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Run details' }, '404': { description: 'Not found' } } } },
-    '/logs': { get: { summary: 'Execution logs', parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer' } }], responses: { '200': { description: 'Log entries' } } } },
-    '/visualise/{alias}': { get: { summary: 'Visualize a patch', parameters: [{ name: 'alias', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'ASCII diagram' }, '404': { description: 'Not found' } } } },
-    '/parse-nuon': { post: { summary: 'Parse NUON to JSON', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { text: { type: 'string' } } } } } }, responses: { '200': { description: 'Parsed graph' }, '400': { description: 'Invalid NUON' } } } },
-  }
-
-  const schemas: Record<string, any> = {}
-  for (const spec of nodeSpec) {
-    schemas[spec.name] = {
-      type: 'object',
-      properties: {
-        name: { type: 'string', enum: [spec.name] },
-        category: { type: 'string', enum: [spec.category] },
-        input_type: { type: 'string', enum: [spec.input_type] },
-        output_type: { type: 'string', enum: [spec.output_type] },
-        description: { type: 'string' },
-        params: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              type: { type: 'string' },
-              required: { type: 'boolean' },
-              wirable: { type: 'boolean' },
-              description: { type: 'string' },
-              options: { type: 'array', items: { type: 'string' } },
-            },
-          },
-        },
-      },
-    }
-  }
-
-  return c.json({
-    openapi: '3.0.3',
-    info: {
-      title: 'Junction Box Pipeline API',
-      version: '1.0.0',
-      description: 'Node-based dataflow engine for LLM agents. Compose nodes into a graph, POST to /exec, get back transformed data.',
-    },
-    servers: [{ url: 'http://127.0.0.1:3001' }],
-    paths,
-    components: { schemas },
-  })
 })
 
 // ---------------------------------------------------------------------------
