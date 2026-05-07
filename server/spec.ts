@@ -19,32 +19,21 @@ const ROOT = resolve(import.meta.dir, '..')
 
 // The introspection logic as a Nu template (no `use` statements — added dynamically)
 const INTROSPECT_LOGIC = `
-# Extension fallback — commands without @category use *_PRIMITIVE_META if available
-let ext_meta = (
-    scope variables
-    | where name =~ '_PRIMITIVE_META$'
-    | each {|v| $v.value}
-    | reduce --fold {} {|it, acc| $acc | merge $it}
-)
-
 let category_colors = {
     input: "#f97316", transform: "#3b82f6", compute: "#eab308",
     logic: "#ec4899", output: "#22c55e", external: "#a855f7",
-    file: "#f97316", datetime: "#06b6d4"
+    file: "#f97316", datetime: "#06b6d4",
+    bls: "#0891b2", coingecko: "#6c46c7", feargreed: "#ef4444",
+    fred: "#059669", github: "#24292f", hn: "#f97316",
+    web: "#3b82f6", market: "#10b981", reddit: "#ff4500",
+    rss: "#f97316", sec: "#6366f1", wikipedia: "#6b7280",
+    youtube: "#ef4444"
 }
 
 let cmds = (scope commands | where name =~ '^prim-' | where type == 'custom')
 
 let specs = ($cmds | each {|cmd|
-    let short_name = ($cmd.name | str replace 'prim-' '' | str replace --all '-' '_')
-    let ext_m = ($ext_meta | get -o $short_name)
-
-    let category = if ($cmd.category | is-not-empty) {
-        $cmd.category
-    } else if $ext_m != null {
-        ($ext_m | get -o category | default 'other')
-    } else { 'other' }
-
+    let category = if ($cmd.category | is-not-empty) { $cmd.category } else { 'other' }
     let color = ($category_colors | get -o $category | default "#6b7280")
     let agent_hint = ($cmd.description | default '')
 
@@ -63,14 +52,10 @@ let specs = ($cmds | each {|cmd|
             let options  = if ($opts_m | is-empty) { null } else { $opts_m | first | get o | split row ',' }
             let fmt_m    = ($desc | parse --regex '\\[format:(?P<f>[^\\]]+)\\]')
             let fmt      = if ($fmt_m | is-empty) { null } else { $fmt_m | first | get f }
-            let ext_opts = ($ext_m | get -o param_options | default {} | get -o $p.parameter_name)
-            let ext_wire = ($ext_m | get -o wirable | default [] | any {|w| $w == $p.parameter_name})
-            let final_opts = if $options != null { $options } else if $ext_opts != null { $ext_opts } else { null }
-            let final_wire = $wirable or $ext_wire
             let clean_desc = ($desc | str replace --all --regex '\\[[^\\]]*\\]' '' | str trim)
             let base = { name: $p.parameter_name, type: ($p.syntax_shape | default 'string'),
-                         required: $required, wirable: $final_wire, description: $clean_desc }
-            let base = if $final_opts != null { $base | insert options $final_opts } else { $base }
+                         required: $required, wirable: $wirable, description: $clean_desc }
+            let base = if $options != null { $base | insert options $options } else { $base }
             if $fmt != null { $base | insert format $fmt } else { $base }
         })
 
@@ -106,7 +91,9 @@ export async function loadSpec(): Promise<NodeSpec[]> {
 
   const extDir = resolve(ROOT, 'extensions')
   const extensionFiles = existsSync(extDir)
-    ? readdirSync(extDir).filter(f => f.endsWith('.nu')).map(f => `extensions/${f}`)
+    ? (readdirSync(extDir, { recursive: true }) as string[])
+        .filter(f => f.endsWith('.nu') && !f.split('/').pop()!.startsWith('_'))
+        .map(f => `extensions/${f}`)
     : []
 
   const useLines = [...primitiveFiles, ...extensionFiles]

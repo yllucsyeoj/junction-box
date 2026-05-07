@@ -14,7 +14,9 @@ function buildUseLines(): string {
     : ['use primitives.nu *']  // fallback if directory doesn't exist yet
   const extDir = resolve(ROOT, 'extensions')
   const extFiles = existsSync(extDir)
-    ? readdirSync(extDir).filter(f => f.endsWith('.nu')).map(f => `use extensions/${f} *`)
+    ? (readdirSync(extDir, { recursive: true }) as string[])
+        .filter(f => f.endsWith('.nu') && !f.split('/').pop()!.startsWith('_'))
+        .map(f => `use extensions/${f} *`)
     : []
   return [...primFiles, ...extFiles].join('; ')
 }

@@ -3,11 +3,13 @@ node_modules/
 .worktrees/
 dist/
 .DS_Store
+.kilo/
 # Pre-built binaries
 bin/
 # Data dir: track directory structure (.gitkeep) but not runtime files
 data/patches/*.json
 data/runs.jsonl
+data/*.db
 # Legacy patches dir
 patches/
 # Misc test files

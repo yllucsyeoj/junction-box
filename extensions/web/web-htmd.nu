@@ -1,15 +1,7 @@
-export const HTMD_PRIMITIVE_META = {
-    web_htmd: {
-        category: "web"
-        color: "#3b82f6"
-        wirable: ["url"]
-        required_params: ["url"]
-        agent_hint: "Convert HTML or a URL to Markdown and rich metadata. Use --main to extract only main content, --no-images to strip images, --no-links to strip links, --raw for only markdown string."
-    }
-}
-
+# Convert HTML or a URL to Markdown and rich metadata. Use --main to extract only main content, --no-images to strip images, --no-links to strip links, --raw for only markdown string.
+@category web
 export def "prim-web-htmd" [
-    --url: string = ""        # URL to fetch and convert
+    --url: string = ""        # [wirable][required] URL to fetch and convert
     --main                    # Extract only the main content
     --no-images               # Strip images from the output
     --no-links                # Strip links from the output

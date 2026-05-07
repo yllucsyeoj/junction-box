@@ -80,14 +80,17 @@ export function insertPatch(alias: string, description: string, graph: unknown):
 export function upsertPatch(alias: string, description: string, graph: unknown): boolean {
   const db = getDb();
   const graphJson = typeof graph === 'string' ? graph : JSON.stringify(graph);
-  const existing = db.prepare('SELECT alias FROM patches WHERE alias = ?').get(alias);
-  if (existing) {
-    db.prepare('UPDATE patches SET description = ?, graph = ?, updated_at = datetime(\'now\') WHERE alias = ?').run(description, graphJson, alias);
-    return true;
-  } else {
-    db.prepare('INSERT INTO patches (alias, description, graph) VALUES (?, ?, ?)').run(alias, description, graphJson);
-    return false;
-  }
+  const tx = db.transaction(() => {
+    const existing = db.prepare('SELECT alias FROM patches WHERE alias = ?').get(alias);
+    if (existing) {
+      db.prepare("UPDATE patches SET description = ?, graph = ?, updated_at = datetime('now') WHERE alias = ?").run(description, graphJson, alias);
+      return true;
+    } else {
+      db.prepare('INSERT INTO patches (alias, description, graph) VALUES (?, ?, ?)').run(alias, description, graphJson);
+      return false;
+    }
+  });
+  return tx() as boolean;
 }
 
 export function getPatch(alias: string): { alias: string; description: string; graph: unknown; created_at: string } | null {

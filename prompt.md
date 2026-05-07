@@ -29,18 +29,18 @@ Each dimension has three depth levels. Focus your effort on the **Next** column 
 
 | Dimension | L1 | L2 | L3 | Next |
 |---|---|---|---|---|
-| Discovery | ✓ | ✓ | — | L3 |
-| Pipeline construction | ✓ | ✓ | — | L3 |
+| Discovery | ✓ | ✓ | ✓ | done |
+| Pipeline construction | ✓ | ✓ | ✓ | done |
 | Validation | ✓ | ✓ | ✓ | done |
-| Error response consistency | ✓ | ✓ | — | L3 |
+| Error response consistency | ✓ | ✓ | ✓ | done |
 | Persistence (patches + runs) | ✓ | ✓ | ✓ | done |
-| Type system / wiring | ✓ | ✓ | — | L3 |
-| Node categories — data sources | ✓ | ✓ | — | L3 |
+| Type system / wiring | ✓ | ✓ | ✓ | done |
+| Node categories — data sources | ✓ | ✓ | ✓ | done |
 | Parameterized patches | ✓ | ✓ | ✓ | done |
-| Token efficiency | ✓ | ✓ | — | L3 |
-| Async / reference mode | ✓ | ✓ | — | L3 |
-| Manifest accuracy | ✓ | ✓ | — | L3 |
-| Schema consistency | ✓ | ✓ | — | L3 |
+| Token efficiency | ✓ | ✓ | ✓ | done |
+| Async / reference mode | ✓ | ✓ | ✓ | done |
+| Manifest accuracy | ✓ | ✓ | ✓ | done |
+| Schema consistency | ✓ | ✓ | ✓ | done |
 
 **What each level means:**
 
@@ -114,14 +114,17 @@ Think about this question throughout: **if you had to give another agent a singl
 
 ## Orientation (post-assessment, updated)
 
-Junction Box is a node-graph execution engine. Define a pipeline as `{nodes, edges}` and POST to `/exec` — it runs synchronously and returns `{status, result, errors}`. Start with `GET /` (a comprehensive LLM-oriented manifest), then `GET /catalog` (~7K tokens, 141 nodes) for discovery — it shows `name`, `category`, `input_type`, `output_type`, `agent_hint`, and `has_wirable_params` per node. Call `GET /defs/:type` for full param details before wiring. Key rules: source nodes (`const`, `fetch`, `hn-search`, etc.) have no input edge; every other node needs one; `return` or the last node yields `result`. Add `?outputs=full` to see per-node outputs for debugging. Save working pipelines with `POST /patch`.
+Junction Box is a node-graph execution engine. Define a pipeline as `{nodes, edges}` and POST to `/exec` — it runs synchronously and returns `{status, result, errors}`. Start with `GET /` (12KB manifest), then `GET /catalog` (32KB, 140 nodes) for discovery — it returns `name`, `category`, `input_type`, `output_type`, `agent_hint`, and `wirable_params` (a list of wirable port names) per node. Use `GET /catalog?category=X` (~700 bytes) to browse a single category efficiently. Call `GET /defs/:type` for full param details before wiring. **Every edge must include `from_port` and `to_port` explicitly** — omitting either causes a 422. Source nodes (`const`, `fetch`, data-source nodes) have `input_type: nothing` and need no incoming edge. `return` or the last node yields `result`. Add `?outputs=full` to see per-node outputs for debugging. Save working pipelines with `POST /patch`. For async execution, use the `X-Reference: true` header — returns `{status: "pending", run_id}` immediately; poll `GET /runs/:run_id` for completion. Note: `POST /validate` does not exist as a standalone endpoint — validation happens inline on POST /exec (422 = pre-run error, 500 = runtime error).
 
 **Critical things to know:**
 - **22 node categories** — beyond the 8 core categories (input/transform/compute/etc.), there are 14 data-source categories: `hn`, `reddit`, `wikipedia`, `youtube`, `github`, `rss`, `web`, `market`, `coingecko`, `feargreed`, `sec`, `fred`, `bls`, `template`. Use `GET /catalog?category=hn` (etc.) to browse each.
-- **`fetch.url` is wirable** — wire a string output to the `url` port to construct URLs dynamically.
-- **Search node `query` params are required** — `hn-search`, `hn-comments`, `reddit-search`, `wiki-search` all require `--query`; omitting it fails at validation (422), not silently at runtime.
-- **Validation (422) vs runtime (500)** — structural errors (bad params, wrong types, disconnected nodes) are caught pre-run with actionable messages. Network failures and expression errors are 500s at runtime.
+- **`wirable_params` is a list, not a boolean** — each catalog entry has `"wirable_params": ["url"]` (or `[]`). Use it to know which ports accept wired edges.
+- **Every edge needs `from_port` and `to_port`** — `{"from": "n1", "to": "n2"}` alone causes a 422. Always: `{"from": "n1", "from_port": "output", "to": "n2", "to_port": "input"}` (or the param port name for wirable params).
+- **Search node `query` params are required** — `hn-search`, `hn-comments`, `reddit-search`, `wiki-search` all require `query`; omitting it fails at validation (422), not silently at runtime.
+- **Type mismatches are not caught at validation** — wiring an incompatible output to a param port passes validation and fails at runtime with `"Unsupported input (expected: nothing)"`. That message refers to the node's `input_type`, not the type mismatch — it is misleading.
+- **`?async=true` is not actually async** — it runs synchronously and returns the full result. Use `X-Reference: true` header for true async (pending response).
+- **Failed reference runs: errors are at `.response.errors`** — not at top-level `.errors` (which is null on failure). Successful runs expose result at top-level `.result`.
 - **`POST /parse-nuon`** accepts either raw NUON text (`Content-Type: text/plain`) or JSON `{"text": "..."}` (`Content-Type: application/json`) and returns the parsed JSON value.
 - **`position` fields in nodes are ignored** — omit them to save tokens.
 - **Parameterized patches require all params** — if a patch has `__param__:name` placeholders and you call it without params (or partial params), the API returns 422 with `fatal: "Patch requires params: name"`. Passing wrong type coerces to string silently.
-- **`GET /runs/:run_id` exposes result at `.result` (top-level)** — also available at `.response.result` for the full exec object. Top-level `.result` is the shortcut.
+- **`GET /runs/:run_id` exposes result at `.result` (top-level)** — also available at `.response.result` for the full exec object. Top-level `.result` is the shortcut (for successful runs only).

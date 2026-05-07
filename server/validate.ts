@@ -1,4 +1,5 @@
 import type { NodeSpec } from './spec'
+import { toposort } from './toposort'
 
 // Type compatibility matrix — which input types accept which output types.
 // "any" on either side is always compatible.
@@ -66,7 +67,7 @@ function closestType(unknown: string, known: string[]): string | null {
 export interface ValidationError {
   node_id: string
   type: string
-  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value' | 'unknown_param' | 'duplicate_edge_id'
+  error_type: 'unknown_type' | 'invalid_port' | 'broken_edge' | 'type_mismatch' | 'missing_param' | 'disconnected_input' | 'multiple_inputs' | 'invalid_param_value' | 'unknown_param' | 'duplicate_edge_id' | 'cycle_detected'
   message: string
   suggestion: string
 }
@@ -334,6 +335,26 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
         warning_type: 'orphaned_node',
         message: `Node "${node.id}" (${node.type}) is a source node with no outgoing edges — it will be skipped (output has nowhere to go).`,
         suggestion: `Connect it to a downstream node, or remove it if unused.`,
+      })
+    }
+  }
+
+  // Cycle detection — run toposort; if it throws, a cycle exists.
+  // Skip if broken_edge errors exist — missing nodes cause false positives in toposort.
+  const hasBrokenEdges = errors.some(e => e.error_type === 'broken_edge')
+  if (!hasBrokenEdges) {
+    try {
+      toposort(
+        graph.nodes.map(n => n.id),
+        graph.edges.map(e => ({ from: e.from, to: e.to }))
+      )
+    } catch {
+      errors.push({
+        node_id: 'graph',
+        type: '',
+        error_type: 'cycle_detected',
+        message: 'Graph contains a cycle — pipeline execution requires a directed acyclic graph (DAG).',
+        suggestion: 'Check your edges for circular references. Each node can only depend on upstream nodes, never on itself or its downstream nodes.',
       })
     }
   }

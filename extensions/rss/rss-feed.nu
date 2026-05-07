@@ -1,49 +1,8 @@
-# GoNude RSS/Atom extension
-# Node: feed
-# Sources: any RSS 2.0 or Atom feed URL
-# No API keys required.
-
-export const RSS_PRIMITIVE_META = {
-    rss_feed: {
-        category: "rss"
-        color: "#f97316"
-        wirable: ["url"]
-        required_params: ["url"]
-        agent_hint: "Fetch items from any RSS 2.0 or Atom feed URL. Returns a table with title, link, published, summary, author. Works with Reuters, Yahoo Finance, MarketWatch, SEC press releases, HN, Seeking Alpha, any standard feed."
-        param_options: {}
-    }
-}
-
-const RSS_UA = "Mozilla/5.0 (compatible; junction-box-rss/1.0)"
-
-# ── Private helpers ───────────────────────────────────────────────────────────
-
-# Find the first child element with the given tag name in an XML content list
-def rss_find [tag: string]: list -> record {
-    let found = ($in | where {|n| ($n | get tag? | default "") == $tag})
-    if ($found | is-empty) { {tag: $tag, attributes: {}, content: []} } else { $found | first }
-}
-
-# Extract text content from a parsed XML element record
-def rss_text []: record -> string {
-    let c = (try { $in.content | first } catch { return "" })
-    if $c == null { return "" }
-    let inner = (try { $c | get content } catch { return "" })
-    if ($inner | describe) == "string" { $inner } else {
-        try { $inner | first | get content | into string } catch { "" }
-    }
-}
-
-# Read a named attribute from a parsed XML element record
-def rss_attr [attr: string]: record -> string {
-    try { $in | get attributes | get $attr | into string } catch { "" }
-}
-
-# ── Primitive ─────────────────────────────────────────────────────────────────
-
-# Fetch items from any RSS 2.0 or Atom feed URL
+use _shared.nu *
+# Fetch items from any RSS 2.0 or Atom feed URL. Returns a table with title, link, published, summary, author. Works with Reuters, Yahoo Finance, MarketWatch, SEC press releases, HN, Seeking Alpha, any standard feed.
+@category rss
 export def "prim-rss-feed" [
-    --url:   string = ""   # RSS or Atom feed URL
+    --url:   string = ""   # [wirable][required] RSS or Atom feed URL
     --limit: string = "20" # Max number of items to return
 ]: nothing -> table {
     let url_val = if ($url | str starts-with '"') { try { $url | from json } catch { $url } } else { $url }

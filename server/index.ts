@@ -2,12 +2,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, extractRequiredParams } from './db'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, extractRequiredParams, insertRun, updateRunStatus, insertResponse } from './db'
 import { loadSpec } from './spec'
-import { type NodeRunRecord } from './execute'
+import { type NodeRunRecord, type SSEEvent, runPipeline } from './execute'
 import { validateGraph } from './validate'
 import { executeGraph } from './exec-runner'
-import { insertRun, updateRunStatus, insertResponse } from './db'
 import { EXAMPLES } from './examples'
 import { graphToMermaid } from './mermaid'
 import { renderMermaidASCII } from 'beautiful-mermaid'
@@ -427,7 +426,7 @@ app.post('/run', async (c) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
       }
       try {
-        await runPipeline(graph, emit)
+        await runPipeline(graph, emit, nodeSpec)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'fatal', error: msg })}\n\n`))
