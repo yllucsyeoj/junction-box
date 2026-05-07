@@ -6,11 +6,17 @@ import type { NodeSpec } from './spec'
 const ROOT = resolve(import.meta.dir, '..')
 
 function buildUseLines(): string {
+  const primDir = resolve(ROOT, 'primitives')
+  const primFiles = existsSync(primDir)
+    ? (readdirSync(primDir, { recursive: true }) as string[])
+        .filter(f => f.endsWith('.nu'))
+        .map(f => `use primitives/${f} *`)
+    : ['use primitives.nu *']  // fallback if directory doesn't exist yet
   const extDir = resolve(ROOT, 'extensions')
-  const exts = existsSync(extDir)
+  const extFiles = existsSync(extDir)
     ? readdirSync(extDir).filter(f => f.endsWith('.nu')).map(f => `use extensions/${f} *`)
     : []
-  return ['use primitives.nu *', ...exts].join('; ')
+  return [...primFiles, ...extFiles].join('; ')
 }
 
 interface GraphNode { id: string; type: string; params: Record<string, unknown> }
@@ -210,6 +216,8 @@ export async function runPipeline(
     const allParamNames = new Set([...(node.params ? Object.keys(node.params) : []), ...wiredPorts])
 
     for (const paramName of allParamNames) {
+      // Sanitize paramName before embedding in Nu script — defense-in-depth
+      if (!/^[a-z][a-z0-9_-]*$/.test(paramName)) continue
       const paramValue = (node.params ?? {})[paramName] ?? ''
       const paramEdges = graph.edges.filter(e => e.to === nodeId && e.to_port === paramName)
       if (paramEdges.length > 0) {
@@ -230,6 +238,15 @@ export async function runPipeline(
 
     // Build Nu invocation
     const flagStr = resolvedFlags.join(' ')
+    // Allowlist node.type before embedding in Nu script — defense-in-depth
+    if (!/^[a-z][a-z0-9_-]*$/.test(node.type)) {
+      const errMsg = `Invalid node type "${node.type}" — must match [a-z][a-z0-9_-]*`
+      emit({ node_id: nodeId, status: 'error', error: errMsg, error_type: 'runtime' })
+      failed.add(nodeId)
+      outputs.set(nodeId, 'null')
+      nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: errMsg, error_type: 'runtime' })
+      continue
+    }
     const cmdName = `prim-${node.type}`
     // Pass pipeline input via env var — to json produces multi-line output which
     // would break Nu string-literal embedding; env vars handle arbitrary content safely.
@@ -257,6 +274,7 @@ export async function runPipeline(
     const stderr = Buffer.from(proc.stderr).toString().trim()
 
     const nodeSpec = specMap.get(node.type)
+    // input_type is what this node expects to receive — used to annotate type mismatch errors
     const expectedType = nodeSpec?.input_type
 
     if (proc.exitCode !== 0) {
