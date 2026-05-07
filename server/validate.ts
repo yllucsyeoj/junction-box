@@ -88,7 +88,12 @@ export interface Graph {
 export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: ValidationError[]; warnings: ValidationWarning[] } {
   const errors: ValidationError[] = []
   const warnings: ValidationWarning[] = []
-  const specMap = new Map(specs.map(s => [s.name, s]))
+  const specMap = new Map<string, NodeSpec>()
+  for (const s of specs) {
+    specMap.set(s.name, s)
+    const alias = s.name.replace(/-/g, '_')
+    if (alias !== s.name) specMap.set(alias, s)
+  }
   const nodeMap = new Map(graph.nodes.map(n => [n.id, n]))
   const knownTypes = specs.map(s => s.name)
 
@@ -98,14 +103,18 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     // 1. Unknown node type
     if (!spec) {
       const suggestion = closestType(node.type, knownTypes)
+      const normalized = node.type.replace(/_/g, '-')
+      const normalizedSuggestion = normalized !== node.type ? specMap.get(normalized) : null
       errors.push({
         node_id: node.id,
         type: node.type,
         error_type: 'unknown_type',
         message: `Node type "${node.type}" does not exist in the primitive registry.`,
-        suggestion: suggestion
-          ? `Did you mean "${suggestion}"? Run GET /defs for the full list.`
-          : `Run GET /defs to see all available node types.`,
+        suggestion: normalizedSuggestion
+          ? `Node names use hyphens, not underscores. Try "${normalized}" instead of "${node.type}".`
+          : suggestion
+            ? `Did you mean "${suggestion}"? Run GET /defs for the full list.`
+            : `Run GET /defs to see all available node types.`,
       })
       continue
     }

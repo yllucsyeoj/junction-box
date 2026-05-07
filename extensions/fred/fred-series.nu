@@ -1,7 +1,7 @@
-# Fetch FRED economic indicator observations. Returns a table with date, value. Common IDs: GDPC1 (GDP), CPALTT01USM659S (CPI), FEDFUNDS (Fed Funds Rate), DGS10 (10Y Yield), M2SL (M2), UNRATE (Unemployment), INDPRO (Industrial Production), RRSFS (Retail Sales). Uses FRED_API_KEY from .env if available.
+# Fetch FRED economic indicator observations. Returns a table with date, value. Common IDs: GDPC1 (GDP), CPIAUCSL (CPI), FEDFUNDS (Fed Funds Rate), DGS10 (10Y Yield), M2SL (M2), UNRATE (Unemployment), INDPRO (Industrial Production), RRSFS (Retail Sales). Uses FRED_API_KEY from .env if available.
 @category fred
 export def "prim-fred-series" [
-    --series_id:    string = "GDPC1" # [wirable] FRED series ID (e.g. GDPC1, CPI, FEDFUNDS, UNRATE)
+    --series_id:    string = "GDPC1" # [wirable] FRED series ID (e.g. GDPC1, CPIAUCSL, FEDFUNDS, UNRATE)
     --start:        string = ""      # Start date (YYYY-MM-DD, default: 10 years ago)
     --end:          string = ""      # End date (YYYY-MM-DD, default: today)
     --units:        string = "lin"   # Units: lin (level), chg (change), chgpct (pct change)
@@ -20,7 +20,24 @@ export def "prim-fred-series" [
     let e = if ($end | is-empty)   { $today       } else { $end }
     let series_id_val = if ($series_id | str starts-with '"') { try { $series_id | from json } catch { $series_id } } else { $series_id }
     let url = $"https://api.stlouisfed.org/fred/series/observations?series_id=($series_id_val)&api_key=($key)&file_type=json&observation_start=($s)&observation_end=($e)&units=($units)&limit=($limit | into int)"
-    let raw = (http get -H {User-Agent: $FRED_UA} $url)
+
+    # Use curl for better HTTP error handling — Nu's http get swallows 400 response bodies.
+    let curl_out = (try {
+        (^curl -s -w "\n__HTTP_STATUS:%{http_code}" -H $"User-Agent: ($FRED_UA)" $url)
+    } catch {|e|
+        error make {msg: $"FRED request failed: ($e.msg)"}
+    })
+    let status_line = ($curl_out | lines | where {|l| $l | str starts-with '__HTTP_STATUS:'} | first)
+    let status = ($status_line | str replace '__HTTP_STATUS:' '' | into int)
+    let body = ($curl_out | lines | where {|l| not ($l | str starts-with '__HTTP_STATUS:')} | str join "\n")
+
+    if $status != 200 {
+        let err_detail = (try { $body | from json | get error_message } catch { "" })
+        let err_msg = if ($err_detail | is-not-empty) { $err_detail } else { $"HTTP ($status)" }
+        error make {msg: $"FRED API error for series ($series_id_val): ($err_msg)"}
+    }
+
+    let raw = ($body | from json)
     let observations = (try { $raw.observations } catch { [] })
     $observations | each {|o|
         let v = (try { $o.value } catch { "." })

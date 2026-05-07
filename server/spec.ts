@@ -60,7 +60,15 @@ let specs = ($cmds | each {|cmd|
         })
 
     let wirable_ports = ($params | where {|p| $p.wirable} | each {|p|
-        {name: $p.name, type: $p.type, role: "param"}
+        # Params with [format:nuon] or [format:json] accept serialized data — the primitive
+        # parses the string at runtime. Validation should allow any output type since the
+        # execution layer serializes upstream output to JSON/NUON before passing via env var.
+        let port_type = if ($p.format? | default '' | str contains 'nuon') or ($p.format? | default '' | str contains 'json') {
+            'any'
+        } else {
+            $p.type
+        }
+        {name: $p.name, type: $port_type, role: "param"}
     })
     {
         name: ($cmd.name | str replace 'prim-' '')

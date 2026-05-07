@@ -1,4 +1,4 @@
-# Single-operation aggregate: --col 'price' --op 'sum'. Returns a record of col_op keys. To get multiple aggregations, chain separate summarize nodes — one op per node.
+# Single-operation aggregate: --cols 'price' --ops 'sum'. Returns a record of col_op keys. To get multiple aggregations, chain separate summarize nodes — one op per node.
 @category transform
 export def "prim-summarize" [
     --cols: string = ""              # Comma- or space-separated column names (e.g. "price,volume")

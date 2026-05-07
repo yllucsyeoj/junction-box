@@ -67,6 +67,12 @@ const NODE_ERROR_HINTS: Record<string, Record<string, string>> = {
   update: {
     syntax: 'update --value expects NUON format. If wiring a string value, it will be auto-unwrapped.',
   },
+  'date-add': {
+    type_mismatch: 'date-add accepts datetime or string dates. If you have a string like "2024-01-15", pass it directly — it will be auto-parsed. For other formats, use into-datetime first.',
+  },
+  math: {
+    type_mismatch: 'math node expects numeric input. If wiring to --operand, the upstream node must output a number (e.g. const with value "42" or a wired number).',
+  },
 }
 
 // Extract the innermost meaningful error message from a nested Nu error.
@@ -158,7 +164,12 @@ export async function runPipeline(
   emit: (event: SSEEvent) => void,
   specs: NodeSpec[] = []
 ): Promise<NodeRunRecord[]> {
-  const specMap = new Map(specs.map(s => [s.name, s]))
+  const specMap = new Map<string, NodeSpec>()
+  for (const s of specs) {
+    specMap.set(s.name, s)
+    const alias = s.name.replace(/-/g, '_')
+    if (alias !== s.name) specMap.set(alias, s)
+  }
   // Validate and determine execution order
   const order = toposort(
     graph.nodes.map(n => n.id),
@@ -246,7 +257,7 @@ export async function runPipeline(
       nodeRecords.push({ node_id: nodeId, type: node.type, status: 'error', duration_ms: Date.now() - nodeStart, error: errMsg, error_type: 'runtime' })
       continue
     }
-    const cmdName = `prim-${node.type}`
+    const cmdName = `prim-${node.type.replace(/_/g, '-')}`
     // Pass pipeline input via env var — to json produces multi-line output which
     // would break Nu string-literal embedding; env vars handle arbitrary content safely.
     const PIPE_IN = 'GONUDE_PIPE_IN'
