@@ -249,3 +249,39 @@ export function getResponse(runId: string): { run_id: string; response: unknown;
     created_at: row.created_at,
   };
 }
+
+export function listRunResults(
+  patchAlias: string,
+  limit?: number,
+  offset?: number
+): Array<{ run_id: string; status: string; created_at: string; response: unknown | null }> {
+  const db = getDb();
+  let sql = `
+    SELECT r.run_id, r.status, r.created_at, resp.response as response_json
+    FROM runs r
+    LEFT JOIN responses resp ON r.run_id = resp.run_id
+    WHERE r.patch_alias = ?
+    ORDER BY r.created_at DESC
+  `;
+  const params: unknown[] = [patchAlias];
+  if (limit !== undefined) {
+    sql += ' LIMIT ?';
+    params.push(limit);
+  }
+  if (offset !== undefined) {
+    sql += ' OFFSET ?';
+    params.push(offset);
+  }
+  const rows = db.prepare(sql).all(...params) as Array<{
+    run_id: string;
+    status: string;
+    created_at: string;
+    response_json: string | null;
+  }>;
+  return rows.map(row => ({
+    run_id: row.run_id,
+    status: row.status,
+    created_at: row.created_at,
+    response: row.response_json !== null ? JSON.parse(row.response_json) : null,
+  }));
+}

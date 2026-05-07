@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { resolve } from 'node:path'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, extractRequiredParams, insertRun, updateRunStatus, insertResponse } from './db'
+import { upsertPatch, getPatch, listPatches, deletePatch, getRun, getResponse, listRuns, listRunResults, extractRequiredParams, insertRun, updateRunStatus, insertResponse } from './db'
 import { loadSpec } from './spec'
 import { type NodeRunRecord, type SSEEvent, runPipeline } from './execute'
 import { validateGraph } from './validate'
@@ -1217,6 +1217,27 @@ app.delete('/patch/:alias', (c) => {
   }
   logRun({ type: 'patch_delete', alias })
   return c.json({ ok: true, alias })
+})
+
+// ---------------------------------------------------------------------------
+// GET /patch/:alias/runs — all historical run results for a patch
+// ---------------------------------------------------------------------------
+app.get('/patch/:alias/runs', (c) => {
+  const alias = c.req.param('alias')
+  const patch = getPatch(alias)
+  if (!patch) {
+    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+  }
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10), 500)
+  const offset = parseInt(c.req.query('offset') ?? '0', 10)
+  const results = listRunResults(alias, limit, offset)
+  return c.json({
+    alias,
+    count: results.length,
+    limit,
+    offset,
+    results,
+  })
 })
 
 app.get('/patches', (c) => {
