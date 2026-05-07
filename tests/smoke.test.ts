@@ -28,6 +28,20 @@ describe('Extension Smoke Tests', () => {
     expect(res.status).toBeDefined();
   });
 
+  test('db-query: smoke test', async () => {
+    const graph = {
+      nodes: [
+        { id: 'db-query', type: 'db-query', params: { query: 'SELECT run_id, status FROM runs_v LIMIT 5' } },
+        { id: 'out', type: 'return', params: {} }
+      ],
+      edges: [
+        { from: 'db-query', from_port: 'output', to: 'out', to_port: 'input' }
+      ]
+    };
+    const res = await exec(graph);
+    expect(res.status).toBeDefined();
+  });
+
   test('display: smoke test', async () => {
     const graph = {
       nodes: [

@@ -47,6 +47,20 @@ export function initDb(path?: string): Database {
   addColumnIfNotExists(db, 'patches', 'output_description', 'TEXT');
   addColumnIfNotExists(db, 'patches', 'tags', 'TEXT');
 
+  // Pre-built view for querying historical runs with responses
+  db.exec(`
+    CREATE VIEW IF NOT EXISTS runs_v AS
+    SELECT
+      r.run_id,
+      r.patch_alias,
+      r.status,
+      r.created_at AS run_at,
+      json_extract(resp.response, '$.result') AS result
+    FROM runs r
+    LEFT JOIN responses resp ON r.run_id = resp.run_id
+    ORDER BY r.created_at DESC
+  `);
+
   _db = db;
   return db;
 }

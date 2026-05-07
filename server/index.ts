@@ -262,6 +262,7 @@ app.get('/', (c) => c.json({
     sec:       { description: 'SEC filings: sec-10k, sec-10q, sec-8k, sec-earnings, sec-filing, sec-insider, sec-proxy', color: '#003087' },
     fred:      { description: 'FRED economic data: fred-series (time series), fred-search', color: '#1a4480' },
     bls:       { description: 'Bureau of Labor Statistics: bls-series, bls-presets', color: '#1a4480' },
+    db:        { description: 'Database: db-query — query junction-box SQLite for historical run data', color: '#8b5cf6' },
     template:  { description: 'Example/template nodes — reference for building custom data source nodes', color: '#f59e0b' },
   },
 
@@ -274,6 +275,7 @@ app.get('/', (c) => c.json({
     'GET /catalog?accepts=table': 'Filter nodes that accept table input. Also: ?accepts=record, ?accepts=list, ?accepts=string, ?accepts=number.',
     'GET /catalog?produces=list': 'Filter nodes that produce list output. Also: ?produces=table, ?produces=record, ?produces=string.',
     'GET /catalog?category=transform&accepts=table': 'Combined filters — nodes in transform category that accept table input.',
+    'GET /catalog?category=db': 'Query historical run data from the junction-box SQLite database.',
     'GET /defs': `All node types — WARNING: large. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details. Returns name, type (same value), params, ports, wirable_params, example.',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
