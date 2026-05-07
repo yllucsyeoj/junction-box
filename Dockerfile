@@ -23,7 +23,7 @@ COPY bin/nu_plugin_htmd /usr/local/bin/nu_plugin_htmd
 
 WORKDIR /app
 
-COPY --chown=appuser:appuser primitives.nu ./
+COPY --chown=appuser:appuser primitives/ ./primitives/
 COPY --chown=appuser:appuser extensions/ ./extensions/
 
 RUN curl -fsSL https://bun.sh/install | bash && \
