@@ -277,15 +277,16 @@ app.get('/', (c) => c.json({
     'GET /defs': `All node types — WARNING: large. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details. Returns name, type (same value), params, ports, wirable_params, example.',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
-    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs. Add Accept: text/event-stream header for SSE streaming.',
+    'POST /exec': 'Run a pipeline → {status, result, errors}. Body: {nodes, edges} for a new graph, OR {alias: "name"} to run a saved patch, OR {alias: "name", params: {key: "val"}} to run a patch with runtime param injection. Single-node graphs work too (result returned directly). Per-node params: timeout_ms (ms, default 30000) and retries (count, default 1) for auto-retry on transient network errors. Add X-Reference: true header for async mode. Add ?outputs=full for per-node debug outputs. Add Accept: text/event-stream header for SSE streaming.',
     'POST /exec (SSE mode)': 'Add header Accept: text/event-stream → streams per-node events: running, done, retry, error, complete. Includes duration_ms and retry attempts.',
     'POST /exec (reference mode)': 'Add header X-Reference: true → returns {status: "pending", run_id: "..."} immediately. Execute GET /runs/:run_id later to fetch result.',
-    'POST /patch': 'Save a validated graph: {alias, description, graph}',
+    'POST /patch': 'Save a validated graph: {alias, description, graph, input_schema?, output_description?, tags?}. All patches are validated before storing — required params must be static or wired to __param__: placeholders. Tags and metadata help discovery and documentation.',
     'GET /patches': 'List all saved patches (stored in SQLite)',
     'GET /patch/:alias': 'Get a saved patch by alias',
     'GET /patch/:alias/params': 'Introspect patch parameters — returns {alias, params, has_wired_params, wired_defaults}',
     'GET /patch/:alias/explain': 'Generate a natural language explanation of what the patch does, using LLM',
     'POST /preview': 'Dry-run a patch with truncated outputs and LLM placeholders — body: {alias, params?, max_rows: 3}',
+    'GET /patch/:alias/runs': 'All historical run results for a patch alias — returns {run_id, run_at, data} per run. Supports ?limit and ?offset.',
     'DELETE /patch/:alias': 'Delete a saved patch',
     'GET /visualise/:alias': 'Render a saved patch as an ASCII flowchart diagram — useful for visualizing dataflow pipelines before running',
     'GET /runs': 'List all runs with optional filters: ?patch_alias=X&limit=50&offset=0 (all runs stored in SQLite)',
@@ -1237,6 +1238,10 @@ app.get('/patch/:alias/runs', (c) => {
     limit,
     offset,
     results,
+    _manifest: {
+      hint: 'Each result contains {run_id, run_at, data} where data is the result field from the run response.',
+      filters: ['limit', 'offset'],
+    }
   })
 })
 
