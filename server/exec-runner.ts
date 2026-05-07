@@ -59,25 +59,6 @@ export async function executeGraph(
     fatalError = err instanceof Error ? err.message : String(err)
   }
 
-  if (fatalError || Object.keys(errors).length > 0) {
-    const partialOutputs: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(outputs)) {
-      try { partialOutputs[k] = JSON.parse(v) } catch { partialOutputs[k] = v }
-    }
-    return {
-      status: 'error',
-      run_id: runId,
-      validation_errors: [],
-      warnings: validationWarnings,
-      errors,
-      fatal: fatalError,
-      skipped: outputsMode !== 'none' ? skipped : [],
-      outputs: outputsMode !== 'none' ? partialOutputs : {},
-      result: null,
-      nodeRecords,
-    }
-  }
-
   const decodedOutputs: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(outputs)) {
     try { decodedOutputs[k] = JSON.parse(v) } catch { decodedOutputs[k] = v }
@@ -90,6 +71,21 @@ export async function executeGraph(
   const result = rawResult === null ? null : (() => {
     try { return JSON.parse(rawResult) } catch { return rawResult }
   })()
+
+  if (fatalError || Object.keys(errors).length > 0) {
+    return {
+      status: 'error',
+      run_id: runId,
+      validation_errors: [],
+      warnings: validationWarnings,
+      errors,
+      fatal: fatalError,
+      skipped: outputsMode !== 'none' ? skipped : [],
+      outputs: outputsMode !== 'none' ? decodedOutputs : {},
+      result,
+      nodeRecords,
+    }
+  }
 
   return {
     status: 'complete',

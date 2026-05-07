@@ -158,6 +158,7 @@ export async function runPipeline(
 
   const outputs = new Map<string, string>()   // node_id -> NUON string
   const failed = new Set<string>()            // nodes that errored or were skipped
+  const errors = new Map<string, { error: string; error_type: string; expected_type?: string; got_type?: string }>()
   const nodeRecords: NodeRunRecord[] = []
 
   for (const nodeId of order) {
@@ -178,7 +179,8 @@ export async function runPipeline(
 
     // If any upstream dependency failed, skip this node rather than running it with null input
     const inputEdge = graph.edges.find(e => e.to === nodeId && e.to_port === 'input')
-    if (inputEdge && failed.has(inputEdge.from)) {
+    const upstreamFailed = inputEdge ? failed.has(inputEdge.from) : false
+    if (upstreamFailed && node.type !== 'catch') {
       emit({ node_id: nodeId, status: 'skipped', reason: `Upstream node "${inputEdge.from}" failed or was skipped.` })
       failed.add(nodeId)
       outputs.set(nodeId, 'null')
@@ -190,6 +192,10 @@ export async function runPipeline(
 
     // inputEdge already found above for skipping logic — reuse it here
     const pipelineInput = inputEdge ? (outputs.get(inputEdge.from) ?? null) : null
+
+    // If this is a catch node and upstream failed, pass the upstream error via env var
+    // so prim-catch can invoke the handler instead of skipping entirely
+    const upstreamError = upstreamFailed ? errors.get(inputEdge!.from) : undefined
 
     // Resolve params — edge-connected params come from env vars.
     // Collect all param names: both statically set AND wired-only (absent from node.params).
@@ -229,6 +235,9 @@ export async function runPipeline(
     // would break Nu string-literal embedding; env vars handle arbitrary content safely.
     const PIPE_IN = 'GONUDE_PIPE_IN'
     if (pipelineInput !== null) paramEnv[PIPE_IN] = pipelineInput
+    if (node.type === 'catch' && upstreamError) {
+      paramEnv['GONUDE_UPSTREAM_ERROR'] = JSON.stringify(upstreamError)
+    }
     const inputExpr = pipelineInput !== null ? `($env.${PIPE_IN} | from json) | ` : ''
     // All nodes serialize to JSON — clean for API consumers and jq-able directly.
     const serialize = '| to json'
@@ -253,6 +262,8 @@ export async function runPipeline(
     if (proc.exitCode !== 0) {
       // Parse/syntax error — Nu couldn't compile the script
       const { message, error_type, expected_type, got_type } = normalizeNuError(stderr, node.type, node.params, expectedType)
+      const errInfo = { error: message, error_type, expected_type, got_type }
+      errors.set(nodeId, errInfo)
       emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)
@@ -274,6 +285,8 @@ export async function runPipeline(
         raw = JSON.parse(stdout).slice('__GONUDE_ERROR:'.length)
       }
       const { message, error_type, expected_type, got_type } = normalizeNuError(raw, node.type, node.params, expectedType)
+      const errInfo = { error: message, error_type, expected_type, got_type }
+      errors.set(nodeId, errInfo)
       emit({ node_id: nodeId, status: 'error', error: message, error_type, expected_type, got_type })
       outputs.set(nodeId, 'null')
       failed.add(nodeId)

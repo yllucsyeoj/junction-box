@@ -308,6 +308,20 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     }
   }
 
+  // 8. Reject multiple edges targeting the same node's input port
+  for (const node of graph.nodes) {
+    const inputEdges = graph.edges.filter(e => e.to === node.id && e.to_port === 'input')
+    if (inputEdges.length > 1) {
+      errors.push({
+        node_id: node.id,
+        type: node.type,
+        error_type: 'multiple_inputs',
+        message: `Node "${node.id}" (${node.type}) has ${inputEdges.length} incoming edges on its input port, but only one is supported.`,
+        suggestion: `Use param ports for multi-input. For table-concat, wire additional tables to --more. For join, use --right.`,
+      })
+    }
+  }
+
   // Warn about orphaned source nodes (input_type === 'nothing' with no outgoing edges)
   for (const node of graph.nodes) {
     const spec = specMap.get(node.type)

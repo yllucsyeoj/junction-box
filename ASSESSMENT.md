@@ -50,12 +50,16 @@
 - **Fix:** Changed the catch block to use `$e.json` instead of `$e.msg` to capture the full nested error structure. Added recursive JSON parsing to extract the deepest inner error message. Updated `normalizeNuError` to use `extractCoreMessage()` which finds the deepest "x <message>" line in the error text, and added classification for `arithmetic` errors (division by zero).
 - **Why it matters:** These messages are meaningless to an agent. They suggest a server bug rather than a user-fixable issue, causing confusion and unnecessary retry loops.
 
-### F-9: `catch` node does not catch upstream runtime errors
+### F-9: `catch` node does not catch upstream runtime errors **[FIXED]**
 - **Observed:** A `math` node that errors (string input) wired into `catch` still propagates the error and fails the pipeline. `catch` only passes through clean data.
+- **Root cause:** Two issues: (1) The execution engine skipped any node whose upstream `input` edge came from a failed node, so `catch` never even ran when upstream failed. (2) `prim-catch` had no mechanism to receive error information from an upstream failure — it only caught errors from its own `--expr`.
+- **Fix:** (1) In `server/execute.ts`, exempted `catch` nodes from upstream-failure skipping so they always execute. Added an `errors` Map to preserve per-node runtime error details. Passed the upstream error record via `GONUDE_UPSTREAM_ERROR` env var when the target node is `catch`. (2) In `primitives.nu`, updated `prim-catch` to check `GONUDE_UPSTREAM_ERROR` first — if present, parse the JSON error and invoke `--handler` with it. (3) In `server/exec-runner.ts`, moved `result` extraction before the error early-return so a successful `catch` output is available even when upstream nodes errored.
 - **Why it matters:** The `catch` node is advertised in the manifest under "logic / error handling" but provides no actual error-handling capability for the most common failure mode (upstream node failure).
 
-### F-10: `table-concat` silently drops tables wired to the `input` port
+### F-10: `table-concat` silently drops tables wired to the `input` port **[FIXED]**
 - **Observed:** Wiring two source tables both to `table-concat.input` (instead of one to `input` and one to `more`) returns only the first table with no validation error or warning. The second table is lost.
+- **Root cause:** The validator had no rule preventing multiple edges from targeting the same node's `input` port. The execution engine used `.find()` to select a single input edge, so any additional edges were silently ignored.
+- **Fix:** Added a `multiple_inputs` validation check in `server/validate.ts` that rejects graphs where any node has more than one incoming edge on its `input` port. Returns a clear error message suggesting param ports (e.g. `--more`) for multi-input scenarios.
 - **Why it matters:** Silent data loss. An agent making a wiring mistake loses data without any feedback. The node should either reject multiple `input` edges or auto-route them.
 
 ### F-11: `each` node produces unhelpful errors for common mistakes
@@ -86,7 +90,7 @@
 | **High** | Return HTTP `422` for runtime type mismatches and expression failures, or at least a non-2xx code. | Gives agents a reliable HTTP-level failure signal. |
 | **Medium** | Wrap all Nushell runtime errors with agent-friendly messages that name the node, the param, and the actual vs expected type. | Removes confusion; turns cryptic errors into actionable fixes. |
 | **Medium** | Make `catch` actually catch upstream node failures (or remove it from the "logic / error handling" category). | Prevents false confidence; either enables real error handling or clears misleading docs. |
-| **Medium** | Reject or warn when multiple edges target the same non-multi input port (e.g. `table-concat.input`). | Prevents silent data loss from wiring mistakes. |
+| ~~**Medium**~~ | ~~Reject or warn when multiple edges target the same non-multi input port (e.g. `table-concat.input`).~~ | ~~Prevents silent data loss from wiring mistakes.~~ |
 | **Medium** | Standardize `POST /parse-nuon` to return the same envelope as `/exec` (`status`, `result`, `fatal`, etc.). | One response parser works everywhere. |
 | **Low** | Add a `str-join` (or `list-join`) node: input `list<string>`, param `sep`, output `string`. | Enables a common pattern in 1 node instead of a chain. |
 | **Low** | Consider a token-compact catalog mode: `GET /catalog?compact=true` returning only `name,category,input_type,output_type` per node. | Cuts discovery cost from ~8K to ~2K tokens. |
