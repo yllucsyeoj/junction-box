@@ -282,7 +282,7 @@ app.get('/', (c) => c.json({
     sec:       { description: 'SEC filings: sec-10k, sec-10q, sec-8k, sec-earnings, sec-filing, sec-insider, sec-proxy', color: '#003087' },
     fred:      { description: 'FRED economic data: fred-series (time series), fred-search', color: '#1a4480' },
     bls:       { description: 'Bureau of Labor Statistics: bls-series, bls-presets', color: '#1a4480' },
-    db:        { description: 'Database: db-query — query junction-box SQLite for historical run data', color: '#8b5cf6' },
+    db:        { description: 'Database: db-query — query historical pipeline runs with results. Params: alias (filter by patch), status (complete/error/all), limit (default 20), since (date filter). Returns {run_id, patch_alias, status, run_at, result} per row.', color: '#8b5cf6' },
     template:  { description: 'Example/template nodes — reference for building custom data source nodes', color: '#f59e0b' },
   },
 
@@ -295,7 +295,7 @@ app.get('/', (c) => c.json({
     'GET /catalog?accepts=table': 'Filter nodes that accept table input. Also: ?accepts=record, ?accepts=list, ?accepts=string, ?accepts=number.',
     'GET /catalog?produces=list': 'Filter nodes that produce list output. Also: ?produces=table, ?produces=record, ?produces=string.',
     'GET /catalog?category=transform&accepts=table': 'Combined filters — nodes in transform category that accept table input.',
-    'GET /catalog?category=db': 'Query historical run data from the junction-box SQLite database.',
+    'GET /catalog?category=db': 'Query historical pipeline runs with results — use db-query node with alias/status/limit/since params.',
     'GET /defs': `All node types — WARNING: large. Use GET /defs/:type for a single node instead.`,
     'GET /defs/:type': 'Full schema + example for a single node type — use after /catalog to get details. Returns name, type (same value), params, ports, wirable_params, example.',
     'GET /patterns': 'Pre-built common pipeline patterns ready to copy/use',
@@ -314,6 +314,7 @@ app.get('/', (c) => c.json({
     'GET /runs': 'List all runs with optional filters: ?patch_alias=X&limit=50&offset=0 (all runs stored in SQLite)',
     'GET /runs/:run_id': 'Fetch a specific run by ID — includes full graph, status, and stored response',
     'GET /logs': 'Recent execution log (JSONL file)',
+    'POST /validate': 'Validate a graph without executing — returns {valid, validation_errors, warnings}. Same body as POST /exec. Catches type mismatches on main ports and wirable param ports.',
     'POST /parse-nuon': 'Convert NUON text to JSON graph',
     'PATCH /patch/:alias': 'Update an existing patch\'s description or graph',
     'GET /schedules': 'List all scheduled patches with next run times',
@@ -709,13 +710,13 @@ app.post('/validate', async (c) => {
     try {
       body = await c.req.json()
     } catch {
-      return c.json({ valid: false, errors: [], warnings: [], fatal: 'Request body is not valid JSON.' }, 400)
+      return c.json({ valid: false, validation_errors: [], warnings: [], fatal: 'Request body is not valid JSON.' }, 400)
     }
     if (body && typeof body === 'object' && 'alias' in body) {
       alias = String((body as any).alias)
       const patch = getPatch(alias)
       if (!patch) {
-        return c.json({ valid: false, errors: [], warnings: [], fatal: `Patch alias "${alias}" not found.` }, 404)
+        return c.json({ valid: false, validation_errors: [], warnings: [], fatal: `Patch alias "${alias}" not found.` }, 404)
       }
       const runtimeParams = (body as any).params
       if (runtimeParams && typeof runtimeParams === 'object') {
@@ -730,23 +731,23 @@ app.post('/validate', async (c) => {
     const nuonText = await c.req.text()
     const parsed = nuonToGraph(nuonText)
     if (!parsed.ok) {
-      return c.json({ valid: false, errors: [], warnings: [], fatal: `NUON parse error: ${parsed.error}` }, 400)
+      return c.json({ valid: false, validation_errors: [], warnings: [], fatal: `NUON parse error: ${parsed.error}` }, 400)
     }
     graph = parsed.graph
   }
 
   if (!graph || typeof graph !== 'object' || !Array.isArray((graph as any).nodes)) {
-    return c.json({ valid: false, errors: [], warnings: [], fatal: 'Request body must be a graph object: {nodes: [...], edges: [...]}.' }, 400)
+    return c.json({ valid: false, validation_errors: [], warnings: [], fatal: 'Request body must be a graph object: {nodes: [...], edges: [...]}.' }, 400)
   }
   if (!Array.isArray((graph as any).edges)) {
     (graph as any).edges = []
   }
   if ((graph as any).nodes.length === 0) {
-    return c.json({ valid: false, errors: [], warnings: [], fatal: 'Graph has no nodes.' }, 400)
+    return c.json({ valid: false, validation_errors: [], warnings: [], fatal: 'Graph has no nodes.' }, 400)
   }
 
   const { errors, warnings } = validateGraph(graph as any, nodeSpec)
-  return c.json({ valid: errors.length === 0, errors, warnings })
+  return c.json({ valid: errors.length === 0, validation_errors: errors, warnings })
 })
 
 // ---------------------------------------------------------------------------
@@ -1462,9 +1463,10 @@ app.get('/visualise/:alias', async (c) => {
 app.get('/schedules', (c) => {
   const schedules = listSchedules()
   return c.json({
-    schedules: schedules.map(s => ({
+    schedules: schedules.map(({ cron_expr, next_run_at, ...s }) => ({
       ...s,
-      next_run: s.active ? getNextRunFromExpr(s.cron_expr)?.toISOString() : null,
+      cron: cron_expr,
+      next_run: s.active ? getNextRunFromExpr(cron_expr)?.toISOString() : null,
     })),
     _manifest: {
       hint: 'POST /patch with {alias, description, graph, cron?, webhook?} to create a schedule. POST /schedules/:alias/trigger to run immediately.',
@@ -1482,9 +1484,11 @@ app.get('/schedules/:alias', (c) => {
   if (!schedule) {
     return c.json({ status: 'error', error: `Schedule "${alias}" not found.` }, 404)
   }
+  const { cron_expr, next_run_at, ...schedRest } = schedule
   return c.json({
-    ...schedule,
-    next_run: schedule.active ? getNextRunFromExpr(schedule.cron_expr)?.toISOString() : null,
+    ...schedRest,
+    cron: cron_expr,
+    next_run: schedule.active ? getNextRunFromExpr(cron_expr)?.toISOString() : null,
     _manifest: {
       hint: 'PATCH to update active/cron/webhook. DELETE to remove. POST /schedules/:alias/trigger to run immediately.',
     }
@@ -1525,12 +1529,14 @@ app.patch('/schedules/:alias', async (c) => {
   }
 
   const updatedSchedule = getSchedule(alias)!
+  const { cron_expr: updatedCron, next_run_at: _updatedNextRunAt, ...updatedRest } = updatedSchedule
   return c.json({
     ok: true,
     alias,
     schedule: {
-      ...updatedSchedule,
-      next_run: updatedSchedule.active ? getNextRunFromExpr(updatedSchedule.cron_expr)?.toISOString() : null,
+      ...updatedRest,
+      cron: updatedCron,
+      next_run: updatedSchedule.active ? getNextRunFromExpr(updatedCron)?.toISOString() : null,
     }
   })
 })
@@ -1554,7 +1560,7 @@ app.post('/schedules/:alias/trigger', async (c) => {
   const alias = c.req.param('alias')
   const patch = getPatch(alias)
   if (!patch) {
-    return c.json({ status: 'error', error: `Patch "${alias}" not found.` }, 404)
+    return c.json({ status: 'error', error: `Schedule "${alias}" not found — no patch with this alias exists.` }, 404)
   }
 
   const schedule = getSchedule(alias)

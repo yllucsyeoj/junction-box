@@ -138,7 +138,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     // 3. Required params missing (not wired either)
     for (const p of spec.params) {
       if (p.required) {
-        const hasStaticValue = node.params[p.name] !== undefined && node.params[p.name] !== ''
+        const hasStaticValue = node.params?.[p.name] !== undefined && node.params?.[p.name] !== ''
         const hasWiredEdge = graph.edges.some(e => e.to === node.id && e.to_port === p.name)
         if (!hasStaticValue && !hasWiredEdge) {
           errors.push({
@@ -154,7 +154,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
 
     // 4. Unknown params — params in node.params that are not in spec.params
     const knownParamNames = new Set(spec.params.map(p => p.name))
-    for (const paramName of Object.keys(node.params)) {
+    for (const paramName of Object.keys(node.params ?? {})) {
       if (!knownParamNames.has(paramName)) {
         errors.push({
           node_id: node.id,
@@ -169,7 +169,7 @@ export function validateGraph(graph: Graph, specs: NodeSpec[]): { errors: Valida
     // 5. Enum params: validate value is in allowed options
     for (const p of spec.params) {
       if (p.options && p.options.length > 0) {
-        const val = node.params[p.name]
+        const val = node.params?.[p.name]
         const hasWiredEdge = graph.edges.some(e => e.to === node.id && e.to_port === p.name)
         if (!hasWiredEdge && val !== undefined && val !== '' && !p.options.includes(String(val))) {
           errors.push({
