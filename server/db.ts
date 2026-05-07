@@ -254,10 +254,10 @@ export function listRunResults(
   patchAlias: string,
   limit?: number,
   offset?: number
-): Array<{ run_id: string; data: unknown | null }> {
+): Array<{ run_id: string; run_at: string; data: unknown | null }> {
   const db = getDb();
   let sql = `
-    SELECT r.run_id, resp.response as response_json
+    SELECT r.run_id, r.created_at, resp.response as response_json
     FROM runs r
     LEFT JOIN responses resp ON r.run_id = resp.run_id
     WHERE r.patch_alias = ?
@@ -274,12 +274,14 @@ export function listRunResults(
   }
   const rows = db.prepare(sql).all(...params) as Array<{
     run_id: string;
+    created_at: string;
     response_json: string | null;
   }>;
   return rows.map(row => {
     const response = row.response_json !== null ? JSON.parse(row.response_json) : null;
     return {
       run_id: row.run_id,
+      run_at: row.created_at,
       data: response?.result ?? null,
     };
   });
