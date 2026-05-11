@@ -17,16 +17,16 @@ export def "prim-arxiv-search" [
             max_results: ($n | into string)
         }
     } | url join)
-    let raw = (http get -H {User-Agent: "junction-box/1.0"} $url)
-    let chunks = ($raw | split row "<entry>" | skip 1 | first $n)
-    $chunks | each {|c|
+    http get $url | from xml | get content | where tag == "entry" | first $n | each {|entry|
+        let c = $entry.content
+        let authors = ($c | where tag == "author" | each {|a| $a.content | where tag == "name" | first | $in.content.0.content | into string} | str join ", ")
         {
-            id: (try { $c | str replace -r '[\s\S]*<id[^>]*>(.+?)</id>[\s\S]*' '$1' | str trim } catch { "" })
-            title: (try { $c | str replace -r '[\s\S]*<title[^>]*>(.+?)</title>[\s\S]*' '$1' | str trim } catch { "" })
-            authors: (try { $c | split row "<author>" | skip 1 | each {|a| $a | str replace -r '[\s\S]*<name[^>]*>(.+?)</name>[\s\S]*' '$1' | str trim} | str join ", " } catch { "" })
-            published: (try { $c | str replace -r '[\s\S]*<published[^>]*>(.+?)</published>[\s\S]*' '$1' | str trim } catch { "" })
-            summary: (try { $c | str replace -r '[\s\S]*<summary[^>]*>(.+?)</summary>[\s\S]*' '$1' | str trim | str substring 0..500 } catch { "" })
-            link: (try { $c | str replace -r '[\s\S]*<link[^>]*href="([^"]+)"[^>]*/>[\s\S]*' '$1' | str trim } catch { "" })
+            id: (try { $c | where tag == "id" | first | $in.content.0.content | into string | str replace "http://" "https://" } catch { "" })
+            title: (try { $c | where tag == "title" | first | $in.content.0.content | into string | str trim } catch { "" })
+            authors: $authors
+            published: (try { $c | where tag == "published" | first | $in.content.0.content | into string } catch { "" })
+            summary: (try { $c | where tag == "summary" | first | $in.content.0.content | into string | str trim | str substring 0..500 } catch { "" })
+            link: (try { $c | where tag == "link" | first | $in.attributes.href | into string } catch { "" })
         }
     }
 }
