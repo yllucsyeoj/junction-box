@@ -30,7 +30,13 @@ let category_colors = {
     youtube: "#ef4444",
     news: "#dc2626",
     blog: "#000000",
-    search: "#6366f1"
+    search: "#6366f1",
+    reference: "#a855f7",
+    podcast: "#872ec4",
+    ml: "#ff6b6b",
+    analytics: "#f97316",
+    database: "#3b82f6",
+    nocode: "#10b981"
 }
 
 let cmds = (scope commands | where name =~ '^prim-' | where type == 'custom')

@@ -285,6 +285,7 @@ app.get('/', (c) => c.json({
     news:      { description: 'News: bbc-feed, cnn-feed, aljazeera-feed', color: '#dc2626' },
     blog:      { description: 'Blog: medium-feed, substack-feed', color: '#000000' },
     search:    { description: 'Search: arxiv-search, google-scholar, bbc-search', color: '#6366f1' },
+    reference: { description: 'Reference: dictionary — word definitions', color: '#a855f7' },
     db:        { description: 'Database: db-query — query historical pipeline runs with results. Params: alias (filter by patch), status (complete/error/all), limit (default 20), since (date filter). Returns {run_id, patch_alias, status, run_at, result} per row.', color: '#8b5cf6' },
     template:  { description: 'Example/template nodes — reference for building custom data source nodes', color: '#f59e0b' },
   },
