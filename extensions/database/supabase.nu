@@ -44,3 +44,39 @@ export def "prim-supabase-query" [
 
     try { http get -H $headers $url } catch { |e| error make {msg: $"Supabase query failed: ($e.msg)"} }
 }
+
+# Insert a record or table of records into a Supabase table. Input is a record or table — gets posted as JSON to the table endpoint. Requires SUPABASE_KEY and SUPABASE_PROJECT env vars. Returns the inserted row(s).
+@category database
+export def "prim-supabase-insert" [
+    --table: string = ""    # [wirable][required] Table name to insert into
+]: any -> any {
+    let tbl = if ($table | str starts-with '"') { try { $table | from json } catch { $table } } else { $table }
+    if ($tbl | is-empty) { error make {msg: "provide --table to insert into"} }
+
+    let key = $env.SUPABASE_KEY?
+    let project = $env.SUPABASE_PROJECT?
+    if (($key | default "") | is-empty) { error make {msg: "set SUPABASE_KEY environment variable"} }
+    if (($project | default "") | is-empty) { error make {msg: "set SUPABASE_PROJECT environment variable"} }
+
+    let url = ({
+        scheme: "https",
+        host: $"($project).supabase.co",
+        path: $"/rest/v1/($tbl)"
+    } | url join)
+
+    let headers = {
+        User-Agent: "junction-box/1.0"
+        apikey: $key
+        Authorization: $"Bearer ($key)"
+        Prefer: "return=representation"
+    }
+
+    let input = $in
+    let body = if ($input | describe) =~ "table" or ($input | describe) =~ "list" {
+        $input | to json
+    } else {
+        [$input] | to json
+    }
+
+    try { $body | http post -H $headers --content-type application/json $url } catch { |e| error make {msg: $"Supabase insert failed: ($e.msg)"} }
+}
