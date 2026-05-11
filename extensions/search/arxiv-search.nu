@@ -17,7 +17,7 @@ export def "prim-arxiv-search" [
             max_results: ($n | into string)
         }
     } | url join)
-    http get $url | from xml | get content | where tag == "entry" | first $n | each {|entry|
+    http get -H {User-Agent: "Mozilla/5.0 (compatible; junction-box/1.0)"} $url | from xml | get content | where tag == "entry" | first $n | each {|entry|
         let c = $entry.content
         let authors = ($c | where tag == "author" | each {|a| $a.content | where tag == "name" | first | $in.content.0.content | into string} | str join ", ")
         {
