@@ -20,6 +20,8 @@ RUN case "${TARGETARCH}" in \
         "nu-${NU_VERSION}-${NU_ARCH}/nu_plugin_query"
 
 COPY bin/nu_plugin_htmd /usr/local/bin/nu_plugin_htmd
+COPY bin/obscura /usr/local/bin/obscura
+COPY bin/obscura-worker /usr/local/bin/obscura-worker
 
 WORKDIR /app
 
