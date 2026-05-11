@@ -14,11 +14,20 @@ export def "prim-reddit-search" [
     }
     let n   = ($limit | into int)
     let cap = (if $n > 100 { 100 } else { $n })
-    let q   = ($query_val | url encode)
     let url = if $subreddit == "all" {
-        $"($REDDIT_BASE)/search.json?q=($q)&sort=($sort)&t=($time)&limit=($cap)"
+        ({
+            scheme: "https",
+            host: "www.reddit.com",
+            path: "/search.json",
+            params: { q: $query_val, sort: $sort, t: $time, limit: ($cap | into string) }
+        } | url join)
     } else {
-        $"($REDDIT_BASE)/r/($subreddit)/search.json?q=($q)&restrict_sr=1&sort=($sort)&t=($time)&limit=($cap)"
+        ({
+            scheme: "https",
+            host: "www.reddit.com",
+            path: $"/r/($subreddit)/search.json",
+            params: { q: $query_val, restrict_sr: "1", sort: $sort, t: $time, limit: ($cap | into string) }
+        } | url join)
     }
     let doc = (http get -H {User-Agent: $REDDIT_UA} $url)
     $doc.data.children | each {|child| $child.data | reddit_post_row }

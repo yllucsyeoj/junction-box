@@ -1,0 +1,15 @@
+{
+  "description": "Search arXiv for papers on a topic",
+  "graph": {
+    "nodes": [
+      {"id": "src", "type": "arxiv-search", "params": {"query": "machine learning", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "src", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Example arXiv paper title", "id": "https://arxiv.org/abs/1234.56789"}
+  ]
+}

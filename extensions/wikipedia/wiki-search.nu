@@ -9,8 +9,12 @@ export def "prim-wiki-search" [
     if ($query_val | is-empty) {
         error make {msg: "provide --query with search terms"}
     }
-    let q   = ($query_val | url encode)
-    let url = $"($WIKI_API)?action=query&list=search&srsearch=($q)&srlimit=($limit | into int)&format=json"
+    let url = ({
+        scheme: "https",
+        host: "en.wikipedia.org",
+        path: "/w/api.php",
+        params: { action: "query", list: "search", srsearch: $query_val, srlimit: ($limit | into int | into string), format: "json" }
+    } | url join)
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.query.search | each {|r|
         {

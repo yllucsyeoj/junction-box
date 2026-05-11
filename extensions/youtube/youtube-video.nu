@@ -8,7 +8,15 @@ export def "prim-youtube-video" [
         error make {msg: "provide --video_id as a bare ID or full YouTube URL"}
     }
     let vid = (yt_normalize_id $video_id)
-    let url = $"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=($vid)&format=json"
+    let url = ({
+        scheme: "https",
+        host: "www.youtube.com",
+        path: "/oembed",
+        params: {
+            url: $"https://www.youtube.com/watch?v=($vid)",
+            format: "json"
+        }
+    } | url join)
     let raw = (http get -H {User-Agent: $YT_UA} $url)
     {
         video_id:      $vid

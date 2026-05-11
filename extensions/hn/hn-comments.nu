@@ -11,8 +11,16 @@ export def "prim-hn-comments" [
         error make {msg: "provide --query with search terms"}
     }
     let endpoint = if $sort == "date" { "search_by_date" } else { "search" }
-    let q        = ($query_val | url encode)
-    let url      = $"https://hn.algolia.com/api/v1/($endpoint)?query=($q)&tags=comment&hitsPerPage=($limit | into int)"
+    let url = ({
+        scheme: "https",
+        host: "hn.algolia.com",
+        path: $"/api/v1/($endpoint)",
+        params: {
+            query: $query_val,
+            tags: "comment",
+            hitsPerPage: ($limit | into int | into string)
+        }
+    } | url join)
     let doc      = (http get -H {User-Agent: $HN_UA} $url)
     $doc.hits | each {|h|
         {

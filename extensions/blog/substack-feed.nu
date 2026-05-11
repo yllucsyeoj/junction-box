@@ -9,7 +9,11 @@ export def "prim-substack-feed" [
     if ($pub_val | is-empty) {
         error make {msg: "provide --publication with a Substack publication slug"}
     }
-    let doc = (http get --raw -H {User-Agent: "Mozilla/5.0 (compatible; junction-box-blog/1.0)"} $"https://($pub_val).substack.com/feed" | from xml)
+    let doc = (http get --raw -H {User-Agent: "Mozilla/5.0 (compatible; junction-box-blog/1.0)"} ({
+        scheme: "https",
+        host: $"($pub_val).substack.com",
+        path: "/feed"
+    } | url join) | from xml)
     let n = ($limit | into int)
     let channel = ($doc.content | rss_find "channel")
     let items = ($channel.content | where {|node| ($node | get tag? | default "") == "item"})

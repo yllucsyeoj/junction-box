@@ -10,8 +10,17 @@ export def "prim-fred-search" [
         error make {msg: "FRED_API_KEY not set in .env — get a free key at fred.stlouisfed.org/docs/api/api_key.html"}
     }
     let query_val = if ($query | str starts-with '"') { try { $query | from json } catch { $query } } else { $query }
-    let q = ($query_val | url encode)
-    let url = $"https://api.stlouisfed.org/fred/series/search?search_text=($q)&api_key=($key)&file_type=json&limit=($limit | into int)"
+    let url = ({
+        scheme: "https",
+        host: "api.stlouisfed.org",
+        path: "/fred/series/search",
+        params: {
+            search_text: $query_val,
+            api_key: $key,
+            file_type: "json",
+            limit: ($limit | into int | into string)
+        }
+    } | url join)
     let raw = (http get -H {User-Agent: $FRED_UA} $url)
     let results = (try { $raw.seriess } catch { [] })
     $results | each {|s|

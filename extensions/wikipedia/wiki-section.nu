@@ -9,8 +9,12 @@ export def "prim-wiki-section" [
     if ($title_val | is-empty) {
         error make {msg: "provide --title as the Wikipedia article title"}
     }
-    let t   = ($title_val | url encode)
-    let url = $"($WIKI_API)?action=parse&page=($t)&prop=wikitext&section=($section | into int)&format=json"
+    let url = ({
+        scheme: "https",
+        host: "en.wikipedia.org",
+        path: "/w/api.php",
+        params: { action: "parse", page: $title_val, prop: "wikitext", section: ($section | into int | into string), format: "json" }
+    } | url join)
     let doc = (http get -H {User-Agent: $WIKI_UA} $url)
     $doc.parse.wikitext | values | first | wiki_text_clean
 }

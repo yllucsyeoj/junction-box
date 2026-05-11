@@ -23,7 +23,15 @@ export def bls_fetch_series [series_ids_val: string, start: int, end: int] {
 
     if ($ids | length) == 1 {
         let sid  = $ids | first
-        let url  = $"https://api.bls.gov/publicAPI/v2/timeseries/data/($sid)?start_year=($start)&end_year=($end)"
+        let url  = ({
+            scheme: "https",
+            host: "api.bls.gov",
+            path: $"/publicAPI/v2/timeseries/data/($sid)",
+            params: {
+                start_year: ($start | into string),
+                end_year: ($end | into string)
+            }
+        } | url join)
         let raw  = (http get $url)
         let rows = (try { $raw.Results.series.0.data } catch { [] })
         $rows | each {|d| bls_parse_row $sid $d }

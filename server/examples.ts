@@ -837,4 +837,30 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
   },
 
+  // ── Search (Phase 2) ─────────────────────────────────────────────────────────
+
+  'arxiv-search': {
+    nodes: [
+      { id: 'src', type: 'arxiv-search', params: { query: 'machine learning', limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  'google-scholar': {
+    nodes: [
+      { id: 'src', type: 'google-scholar', params: { query: 'reinforcement learning', limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  'bbc-search': {
+    nodes: [
+      { id: 'src', type: 'bbc-search', params: { query: 'climate change', limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
 }

@@ -4,7 +4,17 @@ export def "prim-market-screener" [
     --screen: string = "most_actives" # [options:most_actives,day_gainers,day_losers,undervalued_growth_stocks,growth_technology_stocks,aggressive_small_caps,undervalued_large_caps,most_shorted_stocks] Screener preset
     --limit:  string = "20"           # Max results (up to ~25 for free tier)
 ]: nothing -> table {
-    let url = $"https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=($screen)&count=($limit | into int)&region=US&lang=en-US"
+    let url = ({
+        scheme: "https",
+        host: "query1.finance.yahoo.com",
+        path: "/v1/finance/screener/predefined/saved",
+        params: {
+            scrIds: $screen,
+            count: ($limit | into int | into string),
+            region: "US",
+            lang: "en-US"
+        }
+    } | url join)
     let raw = (http get -H {User-Agent: "research-tool admin@example.com"} $url)
 
     let result = ($raw | get finance.result)

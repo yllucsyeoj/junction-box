@@ -29,7 +29,8 @@ let category_colors = {
     rss: "#f97316", sec: "#6366f1", wikipedia: "#6b7280",
     youtube: "#ef4444",
     news: "#dc2626",
-    blog: "#000000"
+    blog: "#000000",
+    search: "#6366f1"
 }
 
 let cmds = (scope commands | where name =~ '^prim-' | where type == 'custom')

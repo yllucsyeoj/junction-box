@@ -7,7 +7,15 @@ export def "prim-market-history" [
 ]: nothing -> table {
     let ticker_val = if ($ticker | str starts-with '"') { try { $ticker | from json } catch { $ticker } } else { $ticker }
     let sym = ($ticker_val | str upcase)
-    let url = $"https://query1.finance.yahoo.com/v8/finance/chart/($sym)?interval=($interval)&range=($range)"
+    let url = ({
+        scheme: "https",
+        host: "query1.finance.yahoo.com",
+        path: $"/v8/finance/chart/($sym)",
+        params: {
+            interval: $interval,
+            range: $range
+        }
+    } | url join)
     let raw = (http get -H {User-Agent: "research-tool admin@example.com"} $url)
 
     let result = ($raw.chart.result | first)

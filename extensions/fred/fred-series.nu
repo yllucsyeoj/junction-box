@@ -20,13 +20,35 @@ export def "prim-fred-series" [
     let e = if ($end | is-empty)   { $today       } else { $end }
     let series_id_val = if ($series_id | str starts-with '"') { try { $series_id | from json } catch { $series_id } } else { $series_id }
     # Lightweight pre-check: verify series exists before fetching observations
-    let verify_url = $"https://api.stlouisfed.org/fred/series?series_id=($series_id_val)&api_key=($key)&file_type=json"
+    let verify_url = ({
+        scheme: "https",
+        host: "api.stlouisfed.org",
+        path: "/fred/series",
+        params: {
+            series_id: $series_id_val,
+            api_key: $key,
+            file_type: "json"
+        }
+    } | url join)
     let verify = (try { http get -H {User-Agent: $FRED_UA} $verify_url } catch { null })
     let has_series = (try { $verify.seriess | length | $in > 0 } catch { false })
     if not $has_series {
         error make {msg: $"FRED series ID '($series_id_val)' not found. Verify the ID at fred.stlouisfed.org/series/($series_id_val)"}
     }
-    let url = $"https://api.stlouisfed.org/fred/series/observations?series_id=($series_id_val)&api_key=($key)&file_type=json&observation_start=($s)&observation_end=($e)&units=($units)&limit=($limit | into int)"
+    let url = ({
+        scheme: "https",
+        host: "api.stlouisfed.org",
+        path: "/fred/series/observations",
+        params: {
+            series_id: $series_id_val,
+            api_key: $key,
+            file_type: "json",
+            observation_start: $s,
+            observation_end: $e,
+            units: $units,
+            limit: ($limit | into int | into string)
+        }
+    } | url join)
 
     # Use curl for better HTTP error handling — Nu's http get swallows 400 response bodies.
     let curl_out = (try {

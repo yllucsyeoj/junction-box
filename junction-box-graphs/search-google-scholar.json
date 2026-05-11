@@ -1,0 +1,15 @@
+{
+  "description": "Search academic papers via CrossRef",
+  "graph": {
+    "nodes": [
+      {"id": "src", "type": "google-scholar", "params": {"query": "deep learning", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "src", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Example paper title", "doi": "10.1000/example"}
+  ]
+}

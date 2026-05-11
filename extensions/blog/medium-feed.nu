@@ -9,7 +9,11 @@ export def "prim-medium-feed" [
     if ($user_val | is-empty) {
         error make {msg: "provide --user with a Medium username or publication slug"}
     }
-    let doc = (http get --raw -H {User-Agent: "Mozilla/5.0 (compatible; junction-box-blog/1.0)"} $"https://medium.com/feed/($user_val)" | from xml)
+    let doc = (http get --raw -H {User-Agent: "Mozilla/5.0 (compatible; junction-box-blog/1.0)"} ({
+        scheme: "https",
+        host: "medium.com",
+        path: $"/feed/($user_val)"
+    } | url join) | from xml)
     let n = ($limit | into int)
     let channel = ($doc.content | rss_find "channel")
     let items = ($channel.content | where {|node| ($node | get tag? | default "") == "item"})

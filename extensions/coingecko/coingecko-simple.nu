@@ -8,7 +8,18 @@ export def "prim-coingecko-simple" [
 ]: nothing -> record {
     const CG_UA = "Mozilla/5.0 (compatible; junction-box-coingecko/1.0)"
     let ids_val = if ($ids | str starts-with '"') { try { $ids | from json } catch { $ids } } else { $ids }
-    let url = $"https://api.coingecko.com/api/v3/simple/price?ids=($ids_val)&vs_currencies=($vs)&include_market_cap=($include_market_cap)&include_24hr_vol=($include_24h_vol)&include_24hr_change=true"
+    let url = ({
+        scheme: "https",
+        host: "api.coingecko.com",
+        path: "/api/v3/simple/price",
+        params: {
+            ids: $ids_val,
+            vs_currencies: $vs,
+            include_market_cap: $include_market_cap,
+            include_24hr_vol: $include_24h_vol,
+            include_24hr_change: "true"
+        }
+    } | url join)
     let raw = (http get -H {User-Agent: $CG_UA} $url)
     let coin_ids = ($ids_val | split row "," | each {|id| $id | str trim })
     mut result = {}

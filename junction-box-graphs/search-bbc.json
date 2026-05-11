@@ -1,0 +1,15 @@
+{
+  "description": "Search BBC News website",
+  "graph": {
+    "nodes": [
+      {"id": "src", "type": "bbc-search", "params": {"query": "climate change", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "src", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "BBC News article title", "link": "https://www.bbc.co.uk/news/articles/example"}
+  ]
+}
