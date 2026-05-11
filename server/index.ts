@@ -282,6 +282,8 @@ app.get('/', (c) => c.json({
     sec:       { description: 'SEC filings: sec-10k, sec-10q, sec-8k, sec-earnings, sec-filing, sec-insider, sec-proxy', color: '#003087' },
     fred:      { description: 'FRED economic data: fred-series (time series), fred-search', color: '#1a4480' },
     bls:       { description: 'Bureau of Labor Statistics: bls-series, bls-presets', color: '#1a4480' },
+    news:      { description: 'News: bbc-feed, cnn-feed, aljazeera-feed', color: '#dc2626' },
+    blog:      { description: 'Blog: medium-feed, substack-feed', color: '#000000' },
     db:        { description: 'Database: db-query — query historical pipeline runs with results. Params: alias (filter by patch), status (complete/error/all), limit (default 20), since (date filter). Returns {run_id, patch_alias, status, run_at, result} per row.', color: '#8b5cf6' },
     template:  { description: 'Example/template nodes — reference for building custom data source nodes', color: '#f59e0b' },
   },

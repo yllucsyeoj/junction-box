@@ -27,7 +27,9 @@ let category_colors = {
     fred: "#059669", github: "#24292f", hn: "#f97316",
     web: "#3b82f6", market: "#10b981", reddit: "#ff4500",
     rss: "#f97316", sec: "#6366f1", wikipedia: "#6b7280",
-    youtube: "#ef4444"
+    youtube: "#ef4444",
+    news: "#dc2626",
+    blog: "#000000"
 }
 
 let cmds = (scope commands | where name =~ '^prim-' | where type == 'custom')

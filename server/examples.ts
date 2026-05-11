@@ -793,4 +793,48 @@ export const EXAMPLES: Record<string, MiniGraph> = {
     edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
   },
 
+  // ── News (Phase 1) ──────────────────────────────────────────────────────────
+
+  'bbc-feed': {
+    nodes: [
+      { id: 'src', type: 'bbc-feed', params: { limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  'cnn-feed': {
+    nodes: [
+      { id: 'src', type: 'cnn-feed', params: { limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  'aljazeera-feed': {
+    nodes: [
+      { id: 'src', type: 'aljazeera-feed', params: { limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  // ── Blog (Phase 1) ───────────────────────────────────────────────────────────
+
+  'medium-feed': {
+    nodes: [
+      { id: 'src', type: 'medium-feed', params: { user: 'towards-data-science', limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
+  'substack-feed': {
+    nodes: [
+      { id: 'src', type: 'substack-feed', params: { publication: 'example', limit: '3' } },
+      ret(),
+    ],
+    edges: [{ id: 'e1', from: 'src', from_port: 'output', to: 'out', to_port: 'input' }],
+  },
+
 }

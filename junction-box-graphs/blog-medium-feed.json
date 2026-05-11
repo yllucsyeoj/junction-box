@@ -1,0 +1,15 @@
+{
+  "description": "Fetch a Medium publication RSS feed",
+  "graph": {
+    "nodes": [
+      {"id": "rss", "type": "medium-feed", "params": {"user": "towards-data-science", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "rss", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Medium publication example", "link": "https://medium.com/towards-data-science"}
+  ]
+}

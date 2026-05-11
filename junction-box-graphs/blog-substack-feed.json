@@ -1,0 +1,15 @@
+{
+  "description": "Fetch a Substack publication RSS feed",
+  "graph": {
+    "nodes": [
+      {"id": "rss", "type": "substack-feed", "params": {"publication": "example", "limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "rss", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Substack publication example", "link": "https://example.substack.com"}
+  ]
+}

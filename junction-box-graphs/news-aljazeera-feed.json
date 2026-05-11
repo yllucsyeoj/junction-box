@@ -1,0 +1,15 @@
+{
+  "description": "Fetch Al Jazeera News RSS feed",
+  "graph": {
+    "nodes": [
+      {"id": "rss", "type": "aljazeera-feed", "params": {"limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "rss", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "Al Jazeera top stories example", "link": "https://www.aljazeera.com"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "description": "Fetch BBC News RSS feed",
+  "graph": {
+    "nodes": [
+      {"id": "rss", "type": "bbc-feed", "params": {"limit": "5"}},
+      {"id": "out", "type": "return", "params": {}}
+    ],
+    "edges": [
+      {"from": "rss", "from_port": "output", "to": "out", "to_port": "input"}
+    ]
+  },
+  "result": [
+    {"title": "BBC News top stories example", "link": "https://www.bbc.com/news"}
+  ]
+}
